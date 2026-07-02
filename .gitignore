@@ -1,0 +1,22 @@
+# Dependencias
+node_modules/
+
+# Builds
+.next/
+dist/
+*.tsbuildinfo
+next-env.d.ts
+
+# Entorno (nunca subir secretos reales)
+.env
+.env.*
+!.env.example
+
+# System
+.DS_Store
+
+# Local Claude Code settings
+.claude/settings.local.json
+
+# Tests
+coverage/
