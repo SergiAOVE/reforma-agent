@@ -17,6 +17,7 @@ next-env.d.ts
 
 # Local Claude Code settings
 .claude/settings.local.json
+.claude/launch.json
 
 # Tests
 coverage/
