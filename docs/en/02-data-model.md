@@ -66,6 +66,16 @@ erDiagram
     agent_jobs ||--o{ decisions : "created by"
 ```
 
+## SQL functions (RPC)
+
+Phase 2 added two RPCs the web app calls via PostgREST (see
+[20260703090000_phase2_membership_helpers.sql](../../supabase/migrations/20260703090000_phase2_membership_helpers.sql)):
+
+| Function                                            | Purpose                                         |
+| --------------------------------------------------- | ----------------------------------------------- |
+| `create_project_with_owner(name, label?, desc?)`    | Project + owner membership in one transaction   |
+| `add_project_member_by_email(project, email, role)` | Owner/admin adds an existing user, audit-logged |
+
 ## Design notes
 
 - **Every project data table carries `project_id`** with `on delete cascade`: deleting a project

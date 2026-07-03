@@ -26,9 +26,10 @@
 | editor | Create visits, evidence, issues and decisions |
 | viewer | Read only                                     |
 
-## RLS implementation (Phase 1)
+## RLS implementation (Phases 1–2)
 
-Implemented in [supabase/migrations/20260702120200_enable_rls.sql](../../supabase/migrations/20260702120200_enable_rls.sql)
+Implemented in [20260702120200_enable_rls.sql](../../supabase/migrations/20260702120200_enable_rls.sql)
+and [20260703090000_phase2_membership_helpers.sql](../../supabase/migrations/20260703090000_phase2_membership_helpers.sql)
 (every policy is commented in the SQL). Summary:
 
 **Helper functions** — `SECURITY DEFINER`, `STABLE`, pinned `search_path`, execute revoked from
@@ -40,29 +41,55 @@ without recursing into their own policy:
 | `is_project_member(project_id)`     | Current user belongs to the project (any role) |
 | `has_project_role(project_id, r[])` | Current user has one of the given roles        |
 | `can_edit_project(project_id)`      | Role is owner, admin or editor                 |
+| `is_project_creator(project_id)`    | Current user created the project (bootstrap)   |
+| `shares_project_with(user_id)`      | Both users belong to some common project       |
+
+**SQL RPCs (Phase 2)** — called from the web app; they never require the service role:
+
+- `create_project_with_owner(name, address_label, description)` — `SECURITY INVOKER`; creates
+  the project and the owner membership atomically under the normal RLS policies.
+- `add_project_member_by_email(project_id, email, role)` — `SECURITY DEFINER` because the caller
+  cannot see profiles of not-yet-member users; all permission checks run inside (caller must be
+  owner/admin; only owners may grant the owner role) and the action is written to `audit_log`.
 
 **Policy pattern per table:**
 
-| Table                                                                                         | select | insert                    | update             | delete                         |
-| --------------------------------------------------------------------------------------------- | ------ | ------------------------- | ------------------ | ------------------------------ |
-| `profiles`                                                                                    | own    | own                       | own                | — (cascade from `auth.users`)  |
-| `projects`                                                                                    | member | creator (`created_by`)    | owner/admin        | owner                          |
-| `project_members`                                                                             | member | owner/admin + bootstrap   | owner/admin        | owner/admin; owner rows: owner |
-| `zones`, `trades`, `documents`, `contract_items`, `visits`, `evidence`, `issues`, `decisions` | member | owner/admin/editor        | owner/admin/editor | owner/admin/editor             |
-| `audio_transcriptions`                                                                        | member | — (worker only)           | editors            | — (raw transcript preserved)   |
-| `agent_jobs`                                                                                  | member | editors (self as creator) | — (worker only)    | — (worker only)                |
-| `audit_log`                                                                                   | member | member, about self        | —                  | — (append-only)                |
+| Table                                                                                         | select           | insert                    | update             | delete                         |
+| --------------------------------------------------------------------------------------------- | ---------------- | ------------------------- | ------------------ | ------------------------------ |
+| `profiles`                                                                                    | own + co-members | own                       | own                | — (cascade from `auth.users`)  |
+| `projects`                                                                                    | member           | creator (`created_by`)    | owner/admin        | owner                          |
+| `project_members`                                                                             | member           | owner/admin + bootstrap   | owner/admin        | owner/admin; owner rows: owner |
+| `zones`, `trades`, `documents`, `contract_items`, `visits`, `evidence`, `issues`, `decisions` | member           | owner/admin/editor        | owner/admin/editor | owner/admin/editor             |
+| `audio_transcriptions`                                                                        | member           | — (worker only)           | editors            | — (raw transcript preserved)   |
+| `agent_jobs`                                                                                  | member           | editors (self as creator) | — (worker only)    | — (worker only)                |
+| `audit_log`                                                                                   | member           | member, about self        | —                  | — (append-only)                |
 
 Notes:
 
 - **Bootstrap**: right after creating a project, the creator may insert themselves as `owner`
-  into `project_members`; everything else requires owner/admin.
+  into `project_members` (checked via `is_project_creator`, a definer helper — an inline
+  subquery would run under RLS and never match); everything else requires owner/admin.
 - **Admins cannot remove owners**: deleting an `owner` membership requires the `owner` role.
 - **`anon` gets nothing**: all policies target `authenticated` only.
 - **The worker bypasses RLS** with the service role key; that is why job state transitions and
   transcript creation have no client policies at all.
+- **`INSERT … RETURNING` gotcha**: returned rows must also pass the table's SELECT policy.
+  That is why `create_project_with_owner` generates the project id up front instead of using
+  `RETURNING` (the creator only becomes a member one statement later).
 - Finer per-role rules (e.g. who may publish a visit) arrive with the phases that build the
   corresponding UI.
+
+## Web authentication (Phase 2)
+
+- Supabase Auth (email + password) integrated in the Next.js App Router via `@supabase/ssr`.
+- Sessions live in cookies; `apps/web/proxy.ts` refreshes tokens on every request and keeps
+  unauthenticated visitors out of `/projects*`.
+- Server components and server actions create a per-request client with the **publishable key**
+  only ([apps/web/lib/supabase/server.ts](../../apps/web/lib/supabase/server.ts)); every query
+  runs under RLS as the signed-in user. The service role key is not read anywhere in `apps/web`.
+- The `profiles` row is created on first authenticated visit (`ensureProfile`).
+- Server actions re-validate input with Zod (`packages/core/src/forms.ts`) and rely on RLS as
+  the final authority — UI role checks are convenience, not enforcement.
 
 ## Open source deployment model
 
@@ -71,6 +98,6 @@ central multi-tenant service: each renovation's data stays under the control of 
 
 ## Status
 
-Phase 1 done: schema + RLS live in migrations, with synthetic seed for local development.
-Storage bucket policies are documented as pending and will be implemented with the upload flows
-(**Phase 4** at the latest).
+Phases 1–2 done: schema + RLS in migrations, auth and membership management live in the web
+app. Storage bucket policies are documented as pending and will be implemented with the upload
+flows (**Phase 4** at the latest).

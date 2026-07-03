@@ -39,9 +39,22 @@ supabase status     # show local URLs and keys for .env
 supabase stop       # stop the stack
 ```
 
-`supabase status` prints the local `API URL`, `anon key` and `service_role key` — copy them into
-`.env` (see `.env.example`). Seeded test users (local only): `ana@example.com` (owner) and
-`luis@example.com` (editor), password `password123`.
+`supabase status` prints the local `API URL` and keys. For the web app, create
+`apps/web/.env.local` (gitignored) with:
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:55321
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<publishable key from supabase status>
+```
+
+Seeded test users (local only): `ana@example.com` (owner) and `luis@example.com` (editor),
+password `password123`.
+
+After changing the schema, regenerate the TypeScript types:
+
+```bash
+supabase gen types typescript --local > packages/db/src/database.types.ts
+```
 
 Migrations live in `supabase/migrations/` (enums → tables → RLS) and the seed in
 `supabase/seed/seed.sql`. See [02-data-model.md](02-data-model.md) and

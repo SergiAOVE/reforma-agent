@@ -7,7 +7,7 @@ A phase is only marked as completed if the checks (lint, typecheck, test, build)
 
 - [x] **Phase 0 — Bootstrap**: pnpm monorepo, web/worker apps, core/ai/db packages, docs, checks.
 - [x] **Phase 1 — Data model**: Supabase schema, enums, migrations, base RLS, synthetic seed.
-- [ ] **Phase 2 — Auth and projects**: Supabase Auth, profiles, projects, memberships and roles.
+- [x] **Phase 2 — Auth and projects**: Supabase Auth, profiles, projects, memberships and roles.
 - [ ] **Phase 3 — Project setup**: zones, trades, documents, contract_items (+ CSV import).
 - [ ] **Phase 4 — Visits and evidence**: visits, photo/audio uploads, private storage, signed URLs.
 - [ ] **Phase 5 — Worker and transcription**: agent_jobs, polling, locking, retries, audio transcription.
@@ -20,6 +20,23 @@ A phase is only marked as completed if the checks (lint, typecheck, test, build)
 - [ ] **Phase 12 — Optional: document intelligence.**
 
 ## Completed phases log
+
+### Phase 2 — 2026-07-03
+
+Supabase Auth integrated in the Next.js App Router via `@supabase/ssr`: session refresh and
+route guards in `apps/web/proxy.ts`, per-request RLS-scoped clients (publishable key only),
+login/signup/logout with server actions, profile auto-creation on first visit. Pages: project
+list, create project, project dashboard shell, settings (details, membership add/remove, delete
+project). New migration adds `create_project_with_owner` (atomic, SECURITY INVOKER),
+`add_project_member_by_email` (SECURITY DEFINER with internal permission checks,
+enumeration-safe generic errors, race-safe insert), co-member profile visibility, and fixes the
+Phase 1 bootstrap policy (its inline EXISTS ran under RLS and never matched). `packages/db`
+gained generated DB types and typed client factories; `packages/core` gained form schemas
+(50 tests total). Two RLS pitfalls documented: `INSERT … RETURNING` requires SELECT policy;
+policy subqueries run under RLS. Verified end-to-end in the browser against the local stack
+(login, signup, isolation between users, editor lockout, member management) and reviewed by a
+22-agent adversarial workflow (2 confirmed findings, both fixed). Checks green: lint,
+typecheck, test, build.
 
 ### Phase 1 — 2026-07-02
 
