@@ -9,7 +9,7 @@
     "start": "next start",
     "lint": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --config ../../vitest.config.ts --passWithNoTests"
   },
   "dependencies": {
     "next": "^16.2.10",
