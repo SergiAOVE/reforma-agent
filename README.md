@@ -51,12 +51,14 @@ pnpm test
 pnpm build
 ```
 
-More detail in [docs/en/05-local-development.md](docs/en/05-local-development.md).
+More detail in [docs/en/05-local-development.md](docs/en/05-local-development.md). Deployment
+guidance lives in [docs/en/07-deployment.md](docs/en/07-deployment.md).
 
 ## Project status
 
-**Phase 0 completed**: monorepo base, documentation and checks. No business functionality yet.
-See [PLAN.md](PLAN.md) for the phased roadmap.
+**Implemented through Phase 9**: MVP schema, auth, project setup, visits/evidence, worker jobs,
+text-only AI drafts, review workflow, weekly summaries and deployment documentation. See
+[PLAN.md](PLAN.md) for the phased roadmap.
 
 ## Security and privacy
 

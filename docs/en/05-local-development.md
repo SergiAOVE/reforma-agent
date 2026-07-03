@@ -129,6 +129,8 @@ Migrations live in `supabase/migrations/` (enums → tables → RLS) and the see
 `supabase/seed/seed.sql`. See [02-data-model.md](02-data-model.md) and
 [03-security-privacy.md](03-security-privacy.md).
 
+Production deployment guidance lives in [07-deployment.md](07-deployment.md).
+
 ## Conventions
 
 - Everything in English: documentation, code identifiers, table names and variables.

@@ -12,7 +12,7 @@ Phase 5 — Worker, agent_jobs, audio transcription. Done.
 Phase 6 — Textual AI extraction: summaries, issue drafts, decision drafts. Done.
 Phase 7 — Review workflow and dashboard. Done.
 Phase 8 — Weekly summary. Done.
-Phase 9 — Deployment docs.
+Phase 9 — Deployment docs. Done.
 Phase 10 — Optional Telegram gateway.
 Phase 11 — Optional NanoClaw gateway.
 Phase 12 — Optional document intelligence.
@@ -26,3 +26,5 @@ Phase 12 — Optional document intelligence.
   introduces unapproved core dependencies, exposes secrets or uses AI vision on photos.
 - Optional integrations (Telegram, NanoClaw, document intelligence) come only after a useful MVP,
   and always as gateways against a first-party API, with no direct database access.
+
+Deployment guidance for the current MVP lives in [07-deployment.md](07-deployment.md).

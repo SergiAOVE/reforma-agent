@@ -14,12 +14,24 @@ A phase is only marked as completed if the checks (lint, typecheck, test, build)
 - [x] **Phase 6 — Textual AI extraction**: summaries, issue drafts and decision drafts (`ai_draft`).
 - [x] **Phase 7 — Dashboard and human review**: dashboard, approve/edit/reject drafts, audit log.
 - [x] **Phase 8 — Weekly summary**: `generate_weekly_summary` job with a reviewable draft.
-- [ ] **Phase 9 — Deployment docs.**
+- [x] **Phase 9 — Deployment docs.**
 - [ ] **Phase 10 — Optional: Telegram gateway.**
 - [ ] **Phase 11 — Optional: NanoClaw gateway.**
 - [ ] **Phase 12 — Optional: document intelligence.**
 
 ## Completed phases log
+
+### Phase 9 — 2026-07-03
+
+Deployment documentation implemented without product/runtime changes. New
+`docs/en/07-deployment.md` documents the production topology (`apps/web` on Vercel, hosted
+Supabase, always-on Node worker), environment variable ownership, Supabase production setup,
+local-to-production migration workflow, Vercel web deployment, Node worker deployment, private
+Storage bucket verification, RLS verification, backup/restore basics, production security checks
+and rollback guidance. `README.md`, `docs/en/05-local-development.md` and
+`docs/en/06-roadmap.md` now link to the deployment guide. No schema, UI, worker behavior, AI jobs,
+Telegram, NanoClaw, OCR, image analysis or document intelligence were added. Checks green: lint,
+typecheck, tests and build.
 
 ### Phase 8 — 2026-07-03
 
