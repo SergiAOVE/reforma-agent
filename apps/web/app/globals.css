@@ -84,6 +84,10 @@ a {
   .grid.two {
     grid-template-columns: 1fr 1fr;
   }
+
+  .grid.three {
+    grid-template-columns: repeat(3, 1fr);
+  }
 }
 
 .field {
@@ -117,6 +121,14 @@ button {
   background: var(--accent);
   color: var(--accent-contrast);
   cursor: pointer;
+}
+
+button:disabled,
+input:disabled,
+select:disabled,
+textarea:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
 }
 
 button.secondary {
@@ -172,6 +184,58 @@ button.link {
 
 .item-list li:last-child {
   border-bottom: none;
+}
+
+.stack-list {
+  list-style: none;
+  margin: 1rem 0 0;
+  padding: 0;
+}
+
+.stack-item {
+  border-top: 1px solid var(--border);
+  padding-block: 1rem;
+}
+
+.stack-item:first-child {
+  border-top: none;
+}
+
+.inline-edit {
+  margin-top: 0.75rem;
+}
+
+.compact-form {
+  margin-bottom: 1rem;
+}
+
+.button-row,
+.split-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.nav-card {
+  display: block;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.nav-card:hover {
+  border-color: var(--accent);
+}
+
+.code-sample {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.75rem;
+  background: #f0efeb;
+  font-size: 0.78rem;
+  line-height: 1.4;
 }
 
 .badge {

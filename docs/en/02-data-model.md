@@ -1,9 +1,10 @@
 # Data model
 
-> Status: **implemented in Phase 1**. Source of truth:
+> Status: **implemented through Phase 3**. Source of truth:
 > [supabase/migrations/](../../supabase/migrations/) — enums, tables and RLS are fully
 > commented there. TypeScript mirrors live in
-> [packages/core/src/enums.ts](../../packages/core/src/enums.ts).
+> [packages/core/src/enums.ts](../../packages/core/src/enums.ts); form and CSV validators live in
+> [packages/core/src/forms.ts](../../packages/core/src/forms.ts).
 
 ## Tables
 
@@ -76,6 +77,28 @@ Phase 2 added two RPCs the web app calls via PostgREST (see
 | `create_project_with_owner(name, label?, desc?)`    | Project + owner membership in one transaction   |
 | `add_project_member_by_email(project, email, role)` | Owner/admin adds an existing user, audit-logged |
 
+## Storage
+
+Phase 3 creates one private bucket:
+
+| Bucket              | Purpose                                      | Path convention                       |
+| ------------------- | -------------------------------------------- | ------------------------------------- |
+| `project-documents` | Plans, quotes, invoices, warranties, annexes | `<project_id>/<uuid>-<safe-filename>` |
+
+The `documents.storage_path` column stores the exact object path. Server components generate
+short-lived signed URLs for members; files are never public. The helper
+`storage_object_project_id(name)` safely parses the first folder segment for Storage RLS.
+
+## Phase 3 screens and validators
+
+- `/projects/[projectId]/setup`: create/edit/delete zones and trades.
+- `/projects/[projectId]/documents`: upload private documents, edit metadata and delete files.
+- `/projects/[projectId]/budget`: create/edit/delete `contract_items` manually and import CSV.
+- CSV imports are validated with `parseBudgetCsv`. The importer accepts these headers:
+  `code,title,description,trade,zone,quantity,unit,unit_price,total_amount,included_excluded,source_page,notes`.
+  `trade` and `zone` values must match existing project setup names; imports never create setup
+  data implicitly.
+
 ## Design notes
 
 - **Every project data table carries `project_id`** with `on delete cascade`: deleting a project
@@ -93,3 +116,5 @@ Phase 2 added two RPCs the web app calls via PostgREST (see
   postal address.
 - Nullable references (`zone_id`, `trade_id`, `visit_id`, …) use `on delete set null` so deleting
   a zone or trade never destroys visits or evidence.
+- Zone and trade names are case-insensitively unique inside each project. This prevents ambiguous
+  CSV imports and keeps setup lists clean.

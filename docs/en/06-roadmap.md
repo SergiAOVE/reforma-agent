@@ -7,7 +7,7 @@ Phase 0 — Bootstrap repo, docs, monorepo, checks.
 Phase 1 — Supabase schema, enums, RLS, seed.
 Phase 2 — Auth, profiles, projects, memberships.
 Phase 3 — Zones, trades, documents, contract_items.
-Phase 4 — Visits, evidence, storage upload.
+Phase 4 — Visits and evidence uploads.
 Phase 5 — Worker, agent_jobs, audio transcription.
 Phase 6 — Textual AI extraction: summaries, issue drafts, decision drafts.
 Phase 7 — Review workflow and dashboard.

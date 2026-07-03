@@ -7,13 +7,6 @@ interface ProjectPageProps {
   params: Promise<{ projectId: string }>;
 }
 
-const upcoming = [
-  { title: "Zones & trades", phase: "Phase 3" },
-  { title: "Documents & budget", phase: "Phase 3" },
-  { title: "Visits & evidence", phase: "Phase 4" },
-  { title: "AI summaries", phase: "Phase 5+" },
-];
-
 export default async function ProjectPage({ params }: ProjectPageProps) {
   const { projectId } = await params;
   const { supabase, user } = await requireUser();
@@ -37,6 +30,30 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
 
   const myRole = members?.find((member) => member.user_id === user.id)?.role;
   const canManage = myRole === "owner" || myRole === "admin";
+
+  const [
+    { count: zoneCount },
+    { count: tradeCount },
+    { count: documentCount },
+    { count: itemCount },
+  ] = await Promise.all([
+    supabase
+      .from("zones")
+      .select("id", { count: "exact", head: true })
+      .eq("project_id", project.id),
+    supabase
+      .from("trades")
+      .select("id", { count: "exact", head: true })
+      .eq("project_id", project.id),
+    supabase
+      .from("documents")
+      .select("id", { count: "exact", head: true })
+      .eq("project_id", project.id),
+    supabase
+      .from("contract_items")
+      .select("id", { count: "exact", head: true })
+      .eq("project_id", project.id),
+  ]);
 
   return (
     <>
@@ -69,12 +86,28 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
       </div>
 
       <div className="grid two">
-        {upcoming.map((item) => (
-          <div className="card" key={item.title}>
-            <h2>{item.title}</h2>
-            <p className="muted">Coming in {item.phase}.</p>
-          </div>
-        ))}
+        <Link className="card nav-card" href={`/projects/${project.id}/setup`}>
+          <h2>Zones & trades</h2>
+          <p className="muted">
+            {zoneCount ?? 0} zones · {tradeCount ?? 0} trades
+          </p>
+        </Link>
+        <Link className="card nav-card" href={`/projects/${project.id}/documents`}>
+          <h2>Documents</h2>
+          <p className="muted">{documentCount ?? 0} private documents</p>
+        </Link>
+        <Link className="card nav-card" href={`/projects/${project.id}/budget`}>
+          <h2>Budget items</h2>
+          <p className="muted">{itemCount ?? 0} contract line items</p>
+        </Link>
+        <div className="card">
+          <h2>Visits & evidence</h2>
+          <p className="muted">Coming in Phase 4.</p>
+        </div>
+        <div className="card">
+          <h2>AI summaries</h2>
+          <p className="muted">Coming in Phase 5+.</p>
+        </div>
       </div>
     </>
   );

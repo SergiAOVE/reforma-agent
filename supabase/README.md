@@ -9,8 +9,10 @@ Database infrastructure managed with the Supabase CLI.
   - `20260702120200_enable_rls.sql` — RLS helpers and policies (commented).
   - `20260703090000_phase2_membership_helpers.sql` — project creation and membership RPCs,
     co-member profile visibility, fixed bootstrap policy.
+  - `20260703171533_phase3_project_setup_storage.sql` — private document bucket, Storage RLS,
+    and case-insensitive unique zone/trade names per project.
 - `seed/` — synthetic development data (never real data). Applied by `supabase db reset`.
-- `policies/` — reserved for standalone policy docs (Storage policies arrive in Phase 4).
+- `policies/` — reserved for standalone policy docs and policy notes.
 
 ## Local workflow
 
@@ -27,4 +29,6 @@ password `password123`.
 
 - RLS enabled on all project data tables; policies based on `project_members`.
 - Private buckets; the service role key lives on the server/worker only.
+- `project-documents` object paths must be `<project_id>/<uuid>-<filename>` because Storage RLS
+  derives the project from the first path segment.
 - The TypeScript mirrors of the SQL enums live in `packages/core/src/enums.ts` — keep in sync.

@@ -8,7 +8,7 @@ A phase is only marked as completed if the checks (lint, typecheck, test, build)
 - [x] **Phase 0 — Bootstrap**: pnpm monorepo, web/worker apps, core/ai/db packages, docs, checks.
 - [x] **Phase 1 — Data model**: Supabase schema, enums, migrations, base RLS, synthetic seed.
 - [x] **Phase 2 — Auth and projects**: Supabase Auth, profiles, projects, memberships and roles.
-- [ ] **Phase 3 — Project setup**: zones, trades, documents, contract_items (+ CSV import).
+- [x] **Phase 3 — Project setup**: zones, trades, documents, contract_items (+ CSV import).
 - [ ] **Phase 4 — Visits and evidence**: visits, photo/audio uploads, private storage, signed URLs.
 - [ ] **Phase 5 — Worker and transcription**: agent_jobs, polling, locking, retries, audio transcription.
 - [ ] **Phase 6 — Textual AI extraction**: summaries, issue drafts and decision drafts (`ai_draft`).
@@ -20,6 +20,20 @@ A phase is only marked as completed if the checks (lint, typecheck, test, build)
 - [ ] **Phase 12 — Optional: document intelligence.**
 
 ## Completed phases log
+
+### Phase 3 — 2026-07-03
+
+Project setup implemented in the web app: `/projects/[projectId]/setup` for zones/trades,
+`/documents` for private technical documents and `/budget` for contract line items. Owner/admin/
+editor roles can create/edit/delete; viewers are read-only in the UI and RLS remains the final
+authority. New migration creates the private `project-documents` bucket, Storage RLS policies
+based on project membership, a safe `storage_object_project_id()` helper, and unique
+case-insensitive zone/trade names per project. Document uploads use the signed-in user's
+publishable-key session, store metadata in `documents`, and generate short-lived signed URLs for
+members. Budget items support manual entry and CSV import with Zod validation, row-numbered
+errors and documented example headers. `packages/core` gained setup/document/budget form schemas
+and `parseBudgetCsv` (58 tests total); `packages/db` types regenerated from the local schema.
+Checks green: migration reset, Storage RLS SQL verification, lint, typecheck, test, build.
 
 ### Phase 2 — 2026-07-03
 

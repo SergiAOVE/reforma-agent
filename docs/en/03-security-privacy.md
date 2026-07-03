@@ -19,17 +19,18 @@
 
 ## Roles
 
-| Role   | Capabilities                                  |
-| ------ | --------------------------------------------- |
-| owner  | Full project control                          |
-| admin  | Project management except removing the owner  |
-| editor | Create visits, evidence, issues and decisions |
-| viewer | Read only                                     |
+| Role   | Capabilities                                                                       |
+| ------ | ---------------------------------------------------------------------------------- |
+| owner  | Full project control                                                               |
+| admin  | Project management except removing the owner                                       |
+| editor | Create setup data, documents, budget items, visits, evidence, issues and decisions |
+| viewer | Read only                                                                          |
 
-## RLS implementation (Phases 1–2)
+## RLS implementation (Phases 1–3)
 
 Implemented in [20260702120200_enable_rls.sql](../../supabase/migrations/20260702120200_enable_rls.sql)
 and [20260703090000_phase2_membership_helpers.sql](../../supabase/migrations/20260703090000_phase2_membership_helpers.sql)
+[20260703171533_phase3_project_setup_storage.sql](../../supabase/migrations/20260703171533_phase3_project_setup_storage.sql)
 (every policy is commented in the SQL). Summary:
 
 **Helper functions** — `SECURITY DEFINER`, `STABLE`, pinned `search_path`, execute revoked from
@@ -43,6 +44,7 @@ without recursing into their own policy:
 | `can_edit_project(project_id)`      | Role is owner, admin or editor                 |
 | `is_project_creator(project_id)`    | Current user created the project (bootstrap)   |
 | `shares_project_with(user_id)`      | Both users belong to some common project       |
+| `storage_object_project_id(path)`   | First Storage path segment parsed as a UUID    |
 
 **SQL RPCs (Phase 2)** — called from the web app; they never require the service role:
 
@@ -91,6 +93,30 @@ Notes:
 - Server actions re-validate input with Zod (`packages/core/src/forms.ts`) and rely on RLS as
   the final authority — UI role checks are convenience, not enforcement.
 
+## Private document storage (Phase 3)
+
+Technical documents use the private `project-documents` bucket created by
+`20260703171533_phase3_project_setup_storage.sql`. Object names must start with the project id:
+
+```text
+<project_id>/<uuid>-<sanitized-original-filename>
+```
+
+Storage RLS is on `storage.objects`:
+
+| Operation | Policy                                          |
+| --------- | ----------------------------------------------- |
+| select    | project members may list/read/download objects  |
+| insert    | owner/admin/editor may upload project documents |
+| update    | owner/admin/editor may replace/update objects   |
+| delete    | owner/admin/editor may delete project documents |
+
+The web app uploads with the signed-in user's publishable-key session, not the service role.
+Members receive short-lived signed URLs generated on the server. The bucket is not public.
+
+Phase 3 deliberately handles only project documents. Visit evidence (photos/audio/video) remains
+Phase 4, and photos are still evidence only — no AI photo analysis.
+
 ## Open source deployment model
 
 Each user deploys their own instance and configures their own Supabase project. There is no
@@ -98,6 +124,6 @@ central multi-tenant service: each renovation's data stays under the control of 
 
 ## Status
 
-Phases 1–2 done: schema + RLS in migrations, auth and membership management live in the web
-app. Storage bucket policies are documented as pending and will be implemented with the upload
-flows (**Phase 4** at the latest).
+Phases 1–3 done: schema + RLS in migrations, auth and membership management live in the web
+app, and private project document Storage is implemented. Visit evidence Storage policies arrive
+with Phase 4.
