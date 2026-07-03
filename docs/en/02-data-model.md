@@ -1,6 +1,6 @@
 # Data model
 
-> Status: **implemented through Phase 4**. Source of truth:
+> Status: **implemented through Phase 7**. Source of truth:
 > [supabase/migrations/](../../supabase/migrations/) — enums, tables and RLS are fully
 > commented there. TypeScript mirrors live in
 > [packages/core/src/enums.ts](../../packages/core/src/enums.ts); form and CSV validators live in
@@ -71,13 +71,13 @@ erDiagram
 
 ## SQL functions (RPC)
 
-Phase 2 added two RPCs the web app calls via PostgREST (see
-[20260703090000_phase2_membership_helpers.sql](../../supabase/migrations/20260703090000_phase2_membership_helpers.sql)):
+Implemented RPCs:
 
-| Function                                            | Purpose                                         |
-| --------------------------------------------------- | ----------------------------------------------- |
-| `create_project_with_owner(name, label?, desc?)`    | Project + owner membership in one transaction   |
-| `add_project_member_by_email(project, email, role)` | Owner/admin adds an existing user, audit-logged |
+| Function                                            | Caller      | Purpose                                             |
+| --------------------------------------------------- | ----------- | --------------------------------------------------- |
+| `create_project_with_owner(name, label?, desc?)`    | Web app     | Project + owner membership in one transaction       |
+| `add_project_member_by_email(project, email, role)` | Web app     | Owner/admin adds an existing user, audit-logged     |
+| `claim_agent_job(worker, types, stale_after)`       | Worker only | Atomically claims pending/stale jobs with row locks |
 
 ## Storage
 
@@ -114,19 +114,68 @@ and `storage_object_visit_id(name)` parses the second segment for visit evidence
 - Photos are stored and displayed only as evidence. Phase 4 does not add OCR, AI vision, photo
   analysis, transcription, worker polling or automatic issue/decision extraction.
 
+## Phase 5 worker and transcription
+
+- Editors can enqueue `transcribe_audio` jobs from audio evidence on the visit detail page.
+- `apps/worker` claims jobs through `claim_agent_job()` using the service role key, downloads
+  the private audio from `visit-evidence`, transcribes it and writes one canonical row to
+  `audio_transcriptions`.
+- `audio_transcriptions.evidence_id` is unique, so retries are idempotent if a worker crashes
+  after inserting a transcript but before completing the job.
+- Transcripts store `raw_transcript` plus editable `edited_transcript`. The visit page shows the
+  transcript as reviewable text and lets editors save human edits.
+- Phase 5 processes audio only. It does not add summaries, issue/decision extraction, OCR,
+  photo analysis, Telegram or NanoClaw.
+
+## Phase 6 textual AI extraction
+
+- Editors can enqueue `generate_visit_summary`, `suggest_issues` and `suggest_decisions` from
+  the visit detail page.
+- All three jobs use `agent_jobs.input = { "visitId": "uuid" }` and are claimed by the worker
+  through the existing `claim_agent_job()` RPC.
+- `generate_visit_summary` writes reviewable text to `visits.summary`; editors can still edit
+  the summary manually in the visit form.
+- `suggest_issues` writes draft rows to `issues` with `status = 'ai_draft'`,
+  `review_state = 'ai_draft'`, `source = 'ai'` and `created_by_job_id`.
+- `suggest_decisions` writes draft rows to `decisions` with the same AI provenance fields.
+- Drafts may reference existing zones, trades and budget line items, but only if the id is
+  present in the worker's text context. Hallucinated ids fail validation before insertion.
+- Phase 6 does not add new tables or migrations; the Phase 1 schema already included the
+  necessary fields and enum values.
+
+## Phase 7 dashboard and human review
+
+- `/projects/[projectId]` is now the operational dashboard: recent visits, open issues, pending
+  decisions, AI drafts, project data links, members and recent audit entries.
+- AI summaries are reviewed on the `visits` row with Phase 7 metadata:
+  `summary_source`, `summary_review_state`, `summary_created_by_job_id`, `summary_reviewed_by`
+  and `summary_reviewed_at`.
+- `generate_visit_summary` now writes `summary_source = 'ai'` and
+  `summary_review_state = 'ai_draft'`; approving/editing/rejecting the summary updates those
+  fields and writes `audit_log`.
+- AI issue drafts move through existing `issues.review_state` and `issues.status`.
+  Approve/edit moves the issue into `open`; reject moves it to `rejected`; close moves it to
+  `closed`.
+- AI decision drafts move through existing `decisions.review_state` and `decisions.status`.
+  Approve moves the decision to `approved`; edit keeps it `pending`; reject moves it to
+  `rejected`; close moves it to `closed`.
+
 ## Design notes
 
 - **Every project data table carries `project_id`** with `on delete cascade`: deleting a project
   removes all its data, and RLS filters by membership on that column.
 - **AI provenance**: AI-created rows carry `source = 'ai'`, `review_state = 'ai_draft'` and
   `created_by_job_id` pointing to the `agent_jobs` row. Flow: `ai_draft → edited/approved/rejected`.
+- **AI summary provenance** mirrors that flow on `visits.summary_*` columns because summaries
+  live on the visit row rather than in a separate table.
 - **`updated_at` is automatic** via the `set_updated_at` trigger on every mutable table.
   `audit_log` has no `updated_at`: it is append-only.
 - **Transcripts are never destroyed**: `raw_transcript` is immutable in practice (no client
-  insert/delete policies); users edit `edited_transcript`. Phase 6 extractions prefer the edited
+  insert/delete policies); users edit `edited_transcript`. Text extraction prefers the edited
   version.
 - **Worker queue**: `agent_jobs` has a partial index on `status = 'pending'` for the polling
-  query, plus `locked_at`/`locked_by`/`attempt_count` fields ready for Phase 5.
+  query, plus `locked_at`/`locked_by`/`attempt_count` fields. Phase 5 claims jobs atomically with
+  `FOR UPDATE SKIP LOCKED` in `claim_agent_job()`.
 - **Data minimization**: `projects.address_label` is a label ("Barcelona flat"), not a full
   postal address.
 - Nullable references (`zone_id`, `trade_id`, `visit_id`, …) use `on delete set null` so deleting

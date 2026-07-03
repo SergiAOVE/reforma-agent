@@ -26,12 +26,14 @@
 | editor | Create setup data, documents, budget items, visits, evidence, issues and decisions |
 | viewer | Read only                                                                          |
 
-## RLS implementation (Phases 1–4)
+## RLS implementation (Phases 1–7)
 
 Implemented in [20260702120200_enable_rls.sql](../../supabase/migrations/20260702120200_enable_rls.sql)
 and [20260703090000_phase2_membership_helpers.sql](../../supabase/migrations/20260703090000_phase2_membership_helpers.sql),
 [20260703171533_phase3_project_setup_storage.sql](../../supabase/migrations/20260703171533_phase3_project_setup_storage.sql)
-and [20260703175220_phase4_visit_evidence_storage.sql](../../supabase/migrations/20260703175220_phase4_visit_evidence_storage.sql)
+and [20260703175220_phase4_visit_evidence_storage.sql](../../supabase/migrations/20260703175220_phase4_visit_evidence_storage.sql),
+and [20260703182114_phase5_worker_job_claiming.sql](../../supabase/migrations/20260703182114_phase5_worker_job_claiming.sql)
+and [20260703190634_phase7_summary_review_metadata.sql](../../supabase/migrations/20260703190634_phase7_summary_review_metadata.sql)
 (every policy is commented in the SQL). Summary:
 
 **Helper functions** — `SECURITY DEFINER`, `STABLE`, pinned `search_path`, execute revoked from
@@ -55,6 +57,8 @@ without recursing into their own policy:
 - `add_project_member_by_email(project_id, email, role)` — `SECURITY DEFINER` because the caller
   cannot see profiles of not-yet-member users; all permission checks run inside (caller must be
   owner/admin; only owners may grant the owner role) and the action is written to `audit_log`.
+- `claim_agent_job(worker_id, allowed_types, stale_after_seconds)` — `SECURITY INVOKER`,
+  executable only by `service_role`; atomically claims worker jobs with `FOR UPDATE SKIP LOCKED`.
 
 **Policy pattern per table:**
 
@@ -142,6 +146,43 @@ The bucket accepts photos, audio, video, PDF, text, CSV and Office document file
 Photos are evidence only. Phase 4 does not perform OCR, AI vision, photo analysis, transcription,
 worker polling or automatic issue/decision extraction.
 
+## Worker and AI job security (Phases 5–6)
+
+- `apps/web` can only enqueue `agent_jobs` through normal authenticated RLS policies. It cannot
+  update job status, forge worker output, write `audio_transcriptions` or write AI provenance as
+  the worker.
+- `apps/worker` is the only runtime that reads `SUPABASE_SERVICE_ROLE_KEY`. It creates a
+  service-role Supabase client with session persistence disabled.
+- `claim_agent_job()` is not executable by `anon` or `authenticated`; only `service_role` can
+  claim pending/stale jobs.
+- The worker processes only the implemented job types:
+  `transcribe_audio`, `generate_visit_summary`, `suggest_issues` and `suggest_decisions`.
+  Other enum values stay reserved for later phases and fail permanently if claimed.
+- `transcribe_audio` rejects non-audio evidence as a permanent job failure.
+- Private audio is downloaded from the `visit-evidence` bucket by the worker service role.
+  Project members still access evidence through signed URLs in the web app.
+- Transcripts are reviewable: the worker writes `raw_transcript` and initial `edited_transcript`;
+  editors may update only the editable transcript field through RLS.
+- Phase 6 text extraction never downloads files from Storage. Its context is limited to visit
+  notes, edited transcripts, zones/trades, document metadata and budget metadata.
+- Issue and decision suggestions are inserted as `ai_draft` rows with `source = 'ai'` and
+  `created_by_job_id`. They are visible to project members but remain drafts until a human review
+  workflow is implemented.
+
+Phase 6 does not implement OCR, AI vision, photo analysis, Telegram or NanoClaw.
+
+## Human review security (Phase 7)
+
+- Review actions are normal Next.js server actions using the signed-in user's publishable-key
+  Supabase session. They do not use or read the service role key.
+- RLS remains the final authority: owner/admin/editor roles can update summaries, issues and
+  decisions; viewers can read but submitted review forms match zero rows.
+- Every approve/edit/reject/close action writes an `audit_log` row with the acting user,
+  entity id and previous/new review state or status.
+- Summary review metadata lives on `visits`, protected by the existing `visits` RLS policies.
+- Issue and decision review uses the existing `issues` and `decisions` RLS policies.
+- Review actions do not enqueue worker jobs and do not run AI inside web requests.
+
 ## Open source deployment model
 
 Each user deploys their own instance and configures their own Supabase project. There is no
@@ -149,6 +190,7 @@ central multi-tenant service: each renovation's data stays under the control of 
 
 ## Status
 
-Phases 1–4 done: schema + RLS in migrations, auth and membership management live in the web app,
-private project document Storage is implemented, and private visit evidence Storage is
-implemented.
+Phases 1–7 done: schema + RLS in migrations, auth and membership management live in the web app,
+private project document Storage and private visit evidence Storage are implemented, and the
+service-role worker can transcribe audio evidence and generate reviewable text drafts through
+`agent_jobs`; project members can now review AI drafts with audit logging.

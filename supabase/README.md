@@ -13,6 +13,8 @@ Database infrastructure managed with the Supabase CLI.
     and case-insensitive unique zone/trade names per project.
   - `20260703175220_phase4_visit_evidence_storage.sql` — private visit evidence bucket and
     Storage RLS for member access and editor uploads.
+  - `20260703182114_phase5_worker_job_claiming.sql` — worker-only job claiming RPC and unique
+    audio transcription per evidence item.
 - `seed/` — synthetic development data (never real data). Applied by `supabase db reset`.
 - `policies/` — reserved for standalone policy docs and policy notes.
 
@@ -34,4 +36,6 @@ password `password123`.
 - `project-documents` object paths must be `<project_id>/<uuid>-<filename>` because Storage RLS
   derives the project from the first path segment.
 - `visit-evidence` object paths must be `<project_id>/<visit_id>/<uuid>-<filename>`.
+- `claim_agent_job()` is executable only by `service_role`; web clients enqueue jobs but cannot
+  claim or complete them.
 - The TypeScript mirrors of the SQL enums live in `packages/core/src/enums.ts` — keep in sync.

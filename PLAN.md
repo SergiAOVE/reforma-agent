@@ -10,9 +10,9 @@ A phase is only marked as completed if the checks (lint, typecheck, test, build)
 - [x] **Phase 2 — Auth and projects**: Supabase Auth, profiles, projects, memberships and roles.
 - [x] **Phase 3 — Project setup**: zones, trades, documents, contract_items (+ CSV import).
 - [x] **Phase 4 — Visits and evidence**: visits, photo/audio uploads, private storage, signed URLs.
-- [ ] **Phase 5 — Worker and transcription**: agent_jobs, polling, locking, retries, audio transcription.
-- [ ] **Phase 6 — Textual AI extraction**: summaries, issue drafts and decision drafts (`ai_draft`).
-- [ ] **Phase 7 — Dashboard and human review**: dashboard, approve/edit/reject drafts, audit log.
+- [x] **Phase 5 — Worker and transcription**: agent_jobs, polling, locking, retries, audio transcription.
+- [x] **Phase 6 — Textual AI extraction**: summaries, issue drafts and decision drafts (`ai_draft`).
+- [x] **Phase 7 — Dashboard and human review**: dashboard, approve/edit/reject drafts, audit log.
 - [ ] **Phase 8 — Weekly summary**: `generate_weekly_summary` job with a reviewable draft.
 - [ ] **Phase 9 — Deployment docs.**
 - [ ] **Phase 10 — Optional: Telegram gateway.**
@@ -20,6 +20,58 @@ A phase is only marked as completed if the checks (lint, typecheck, test, build)
 - [ ] **Phase 12 — Optional: document intelligence.**
 
 ## Completed phases log
+
+### Phase 7 — 2026-07-03
+
+Dashboard and human review implemented. New migration
+`20260703190634_phase7_summary_review_metadata.sql` adds review metadata to `visits.summary`
+(`summary_source`, `summary_review_state`, `summary_created_by_job_id`, `summary_reviewed_by`,
+`summary_reviewed_at`) so AI summaries can be approved, edited or rejected like AI issue and
+decision drafts. The Phase 6 worker now marks generated summaries as `ai_draft`. The project page
+is now an operational dashboard with recent visits, open issues, pending decisions, AI review
+queue, project data links, members and audit log. Shared review forms support approve/edit/reject
+for AI summaries/issues/decisions and close for issues/decisions; review actions run as the
+authenticated user under RLS and write `audit_log` entries. `packages/core` gained review form
+validators and tests. No weekly summaries, Telegram, NanoClaw, OCR, image analysis or new AI jobs
+were added. Checks green: `supabase db reset`, `supabase db lint --local`, local migration list,
+worker smoke generation of summary/issue/decision drafts, authenticated RLS review smoke,
+viewer-denied RLS smoke, lint, typecheck, test and build.
+
+### Phase 6 — 2026-07-03
+
+Textual AI extraction implemented without new schema migrations. `apps/worker` now claims and
+processes `generate_visit_summary`, `suggest_issues` and `suggest_decisions` jobs through the
+existing `agent_jobs` queue and `claim_agent_job()` RPC. Context is text-only: visit notes,
+edited transcripts, zones/trades, document metadata and budget metadata. The worker does not
+download documents/photos, does not OCR and does not use vision. `packages/ai` now exposes text
+provider methods with deterministic `MockAiProvider` output and optional OpenAI structured JSON
+extraction (`OPENAI_TEXT_MODEL`, default `gpt-4o-mini`). `packages/core` gained Zod schemas for
+Phase 6 job input, provider output and completed job metadata. The visit detail page can enqueue
+the three text jobs and displays generated `ai_draft` issue/decision rows while keeping
+approve/edit/reject review workflows for Phase 7. The synthetic seed UUID literals were
+normalized to RFC-shaped values so local seeded rows pass the same Zod UUID validators as
+generated production rows. Checks green: `supabase db reset`, `supabase db lint --local`, local
+migration list, worker smoke test for all three Phase 6 jobs, guardrail scans, lint, typecheck,
+test and build.
+
+### Phase 5 — 2026-07-03
+
+Worker and audio transcription implemented. New migration adds a service-role-only
+`claim_agent_job()` RPC using `FOR UPDATE SKIP LOCKED`, plus a unique
+`audio_transcriptions.evidence_id` index for idempotent retries. `apps/worker` now loads
+server-only Supabase config, creates a service-role client with session persistence disabled,
+polls `agent_jobs`, claims `transcribe_audio` work, retries transient failures, marks permanent
+input errors as failed, downloads private audio evidence, transcribes it and writes
+reviewable `audio_transcriptions`. `packages/ai` now has a transcription-capable
+`AiProvider`, deterministic `MockAiProvider` and optional OpenAI provider
+(`OPENAI_API_KEY`, default model `gpt-4o-mini-transcribe`). The visit detail page can enqueue
+audio transcription jobs, shows pending/processing/failed status and lets editors save the
+reviewed transcript. `packages/core` gained Zod schemas for transcription job input/output and
+transcript edits; tests added across core, AI and worker. Phase 5 stays audio-only: no summaries,
+issue/decision extraction, OCR, photo analysis, Telegram or NanoClaw.
+Checks green: `supabase db reset`, generated DB types, `supabase db lint --local`, migration
+list, service-role worker smoke test, authenticated RPC rejection test, guardrail scans, lint,
+typecheck, test and build.
 
 ### Phase 4 — 2026-07-03
 

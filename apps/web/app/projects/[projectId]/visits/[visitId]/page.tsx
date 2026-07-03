@@ -1,14 +1,18 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { EVIDENCE_TYPES } from "@reforma/core";
+import { EVIDENCE_TYPES, type VisitTextExtractionJobType } from "@reforma/core";
 
 import { loadProjectAccess } from "../../../../../lib/project-access";
 import { VISIT_EVIDENCE_BUCKET } from "../../../../../lib/storage";
+import { DecisionReviewForm, IssueReviewForm, SummaryReviewForm } from "../../review-ui";
 import {
   deleteEvidence,
   deleteVisit,
+  enqueueAudioTranscription,
+  enqueueVisitTextExtraction,
   setVisitStatus,
+  updateAudioTranscription,
   updateEvidence,
   updateVisit,
   uploadEvidence,
@@ -91,32 +95,114 @@ function EvidencePreview({
   );
 }
 
+function evidenceIdFromJobInput(input: unknown): string | null {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return null;
+  }
+
+  const value = (input as { evidenceId?: unknown }).evidenceId;
+  return typeof value === "string" ? value : null;
+}
+
+const TEXT_EXTRACTION_JOBS: { type: VisitTextExtractionJobType; label: string }[] = [
+  { type: "generate_visit_summary", label: "Generate summary" },
+  { type: "suggest_issues", label: "Suggest issues" },
+  { type: "suggest_decisions", label: "Suggest decisions" },
+];
+
+function visitIdFromJobInput(input: unknown): string | null {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return null;
+  }
+
+  const value = (input as { visitId?: unknown }).visitId;
+  return typeof value === "string" ? value : null;
+}
+
+function isVisitTextExtractionJobType(value: string): value is VisitTextExtractionJobType {
+  return TEXT_EXTRACTION_JOBS.some((job) => job.type === value);
+}
+
 export default async function VisitPage({ params, searchParams }: VisitPageProps) {
   const { projectId, visitId } = await params;
   const { error, ok } = await searchParams;
   const { supabase, project, role, canEdit } = await loadProjectAccess(projectId);
 
-  const [{ data: visit }, { data: zones }, { data: trades }, { data: evidence }] =
-    await Promise.all([
-      supabase
-        .from("visits")
-        .select(
-          "id, title, visit_date, status, general_status, summary, human_notes, primary_zone_id, primary_trade_id, published_at",
-        )
-        .eq("id", visitId)
-        .eq("project_id", project.id)
-        .maybeSingle(),
-      supabase.from("zones").select("id, name").eq("project_id", project.id).order("name"),
-      supabase.from("trades").select("id, name").eq("project_id", project.id).order("name"),
-      supabase
-        .from("evidence")
-        .select(
-          "id, type, storage_path, original_filename, mime_type, size_bytes, zone_id, trade_id, manual_note, created_at, zones(name), trades(name)",
-        )
-        .eq("project_id", project.id)
-        .eq("visit_id", visitId)
-        .order("created_at", { ascending: false }),
-    ]);
+  const [
+    { data: visit },
+    { data: zones },
+    { data: trades },
+    { data: contractItems },
+    { data: evidence },
+    { data: transcriptions },
+    { data: transcriptionJobs },
+    { data: extractionJobs },
+    { data: issueDrafts },
+    { data: decisionDrafts },
+  ] = await Promise.all([
+    supabase
+      .from("visits")
+      .select(
+        "id, title, visit_date, status, general_status, summary, human_notes, primary_zone_id, primary_trade_id, published_at, summary_source, summary_review_state",
+      )
+      .eq("id", visitId)
+      .eq("project_id", project.id)
+      .maybeSingle(),
+    supabase.from("zones").select("id, name").eq("project_id", project.id).order("name"),
+    supabase.from("trades").select("id, name").eq("project_id", project.id).order("name"),
+    supabase
+      .from("contract_items")
+      .select("id, code, title")
+      .eq("project_id", project.id)
+      .order("title"),
+    supabase
+      .from("evidence")
+      .select(
+        "id, type, storage_path, original_filename, mime_type, size_bytes, zone_id, trade_id, manual_note, created_at, zones(name), trades(name)",
+      )
+      .eq("project_id", project.id)
+      .eq("visit_id", visitId)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("audio_transcriptions")
+      .select(
+        "id, evidence_id, raw_transcript, edited_transcript, language, provider, model, updated_at",
+      )
+      .eq("project_id", project.id)
+      .order("updated_at", { ascending: false }),
+    supabase
+      .from("agent_jobs")
+      .select("id, status, input, error_message, created_at, updated_at")
+      .eq("project_id", project.id)
+      .eq("type", "transcribe_audio")
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("agent_jobs")
+      .select("id, type, status, input, error_message, created_at, updated_at")
+      .eq("project_id", project.id)
+      .in("type", ["generate_visit_summary", "suggest_issues", "suggest_decisions"])
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("issues")
+      .select(
+        "id, visit_id, title, description, priority, status, review_state, source, zone_id, trade_id, contract_item_id, cost_risk, schedule_risk, created_at, zones(name), trades(name)",
+      )
+      .eq("project_id", project.id)
+      .eq("visit_id", visitId)
+      .eq("source", "ai")
+      .in("review_state", ["ai_draft", "edited"])
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("decisions")
+      .select(
+        "id, visit_id, title, description, priority, status, review_state, source, zone_id, trade_id, deadline, options, recommendation, cost_impact, schedule_impact, created_at, zones(name), trades(name)",
+      )
+      .eq("project_id", project.id)
+      .eq("visit_id", visitId)
+      .eq("source", "ai")
+      .in("review_state", ["ai_draft", "edited"])
+      .order("created_at", { ascending: false }),
+  ]);
 
   if (!visit) {
     notFound();
@@ -124,6 +210,13 @@ export default async function VisitPage({ params, searchParams }: VisitPageProps
 
   const safeZones = zones ?? [];
   const safeTrades = trades ?? [];
+  const safeContractItems = contractItems ?? [];
+  const safeIssueDrafts = issueDrafts ?? [];
+  const safeDecisionDrafts = decisionDrafts ?? [];
+  const hasAiSummaryDraft =
+    visit.summary_source === "ai" &&
+    (visit.summary_review_state === "ai_draft" || visit.summary_review_state === "edited") &&
+    Boolean(visit.summary);
   const evidenceWithUrls = await Promise.all(
     (evidence ?? []).map(async (item) => {
       const { data } = await supabase.storage
@@ -133,6 +226,31 @@ export default async function VisitPage({ params, searchParams }: VisitPageProps
       return { ...item, signedUrl: data?.signedUrl ?? null };
     }),
   );
+  const transcriptionByEvidenceId = new Map(
+    (transcriptions ?? []).map((transcription) => [transcription.evidence_id, transcription]),
+  );
+  const latestJobByEvidenceId = new Map<string, NonNullable<typeof transcriptionJobs>[number]>();
+  const latestExtractionJobByType = new Map<
+    VisitTextExtractionJobType,
+    NonNullable<typeof extractionJobs>[number]
+  >();
+
+  for (const job of transcriptionJobs ?? []) {
+    const evidenceId = evidenceIdFromJobInput(job.input);
+    if (evidenceId && !latestJobByEvidenceId.has(evidenceId)) {
+      latestJobByEvidenceId.set(evidenceId, job);
+    }
+  }
+  for (const job of extractionJobs ?? []) {
+    const jobVisitId = visitIdFromJobInput(job.input);
+    if (
+      jobVisitId === visit.id &&
+      isVisitTextExtractionJobType(job.type) &&
+      !latestExtractionJobByType.has(job.type)
+    ) {
+      latestExtractionJobByType.set(job.type, job);
+    }
+  }
 
   return (
     <>
@@ -287,6 +405,96 @@ export default async function VisitPage({ params, searchParams }: VisitPageProps
       </section>
 
       <section className="card">
+        <h2>Text extraction</h2>
+        <div className="button-row">
+          {TEXT_EXTRACTION_JOBS.map((definition) => {
+            const job = latestExtractionJobByType.get(definition.type);
+            const isRunning = job?.status === "pending" || job?.status === "processing";
+
+            return (
+              <form key={definition.type} action={enqueueVisitTextExtraction}>
+                <input type="hidden" name="projectId" value={project.id} />
+                <input type="hidden" name="visitId" value={visit.id} />
+                <input type="hidden" name="jobType" value={definition.type} />
+                <button type="submit" disabled={!canEdit || isRunning}>
+                  {isRunning ? `${definition.label} queued` : definition.label}
+                </button>
+                {job ? <span className={`badge status-${job.status}`}>{job.status}</span> : null}
+              </form>
+            );
+          })}
+        </div>
+        {TEXT_EXTRACTION_JOBS.map((definition) => {
+          const job = latestExtractionJobByType.get(definition.type);
+          return job?.error_message ? (
+            <p key={definition.type} className="notice error">
+              {definition.label}: {job.error_message}
+            </p>
+          ) : null;
+        })}
+      </section>
+
+      <section className="card">
+        <h2>AI drafts</h2>
+        {!hasAiSummaryDraft && safeIssueDrafts.length === 0 && safeDecisionDrafts.length === 0 ? (
+          <p className="muted">No AI drafts yet.</p>
+        ) : null}
+
+        {hasAiSummaryDraft ? (
+          <>
+            <h3>Summary</h3>
+            <SummaryReviewForm
+              projectId={project.id}
+              visit={visit}
+              canEdit={canEdit}
+              returnTo="visit"
+            />
+          </>
+        ) : null}
+
+        {safeIssueDrafts.length > 0 ? (
+          <>
+            <h3>Issues</h3>
+            <ul className="stack-list">
+              {safeIssueDrafts.map((issue) => (
+                <li key={issue.id} className="stack-item">
+                  <IssueReviewForm
+                    projectId={project.id}
+                    issue={issue}
+                    zones={safeZones}
+                    trades={safeTrades}
+                    contractItems={safeContractItems}
+                    canEdit={canEdit}
+                    returnTo="visit"
+                  />
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : null}
+
+        {safeDecisionDrafts.length > 0 ? (
+          <>
+            <h3>Decisions</h3>
+            <ul className="stack-list">
+              {safeDecisionDrafts.map((decision) => (
+                <li key={decision.id} className="stack-item">
+                  <DecisionReviewForm
+                    projectId={project.id}
+                    decision={decision}
+                    zones={safeZones}
+                    trades={safeTrades}
+                    canEdit={canEdit}
+                    returnTo="visit"
+                  />
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : null}
+      </section>
+
+      <section className="card">
         <h2>Upload evidence</h2>
         <form action={uploadEvidence} encType="multipart/form-data" className="compact-form">
           <input type="hidden" name="projectId" value={project.id} />
@@ -330,56 +538,132 @@ export default async function VisitPage({ params, searchParams }: VisitPageProps
           <ul className="stack-list">
             {evidenceWithUrls.map((item) => (
               <li key={item.id} className="stack-item">
-                <div className="split-row">
-                  <div>
-                    <strong>{item.original_filename}</strong>
-                    <div className="muted">
-                      {item.type} | {item.mime_type} | {formatBytes(item.size_bytes)} |{" "}
-                      {item.zones?.name ?? "No zone"} | {item.trades?.name ?? "No trade"}
-                    </div>
-                  </div>
-                  {item.signedUrl ? (
-                    <a href={item.signedUrl} target="_blank" rel="noreferrer">
-                      Open
-                    </a>
-                  ) : null}
-                </div>
-                <EvidencePreview
-                  signedUrl={item.signedUrl}
-                  type={item.type}
-                  filename={item.original_filename}
-                />
-                <form action={updateEvidence} className="inline-edit">
-                  <input type="hidden" name="projectId" value={project.id} />
-                  <input type="hidden" name="visitId" value={visit.id} />
-                  <input type="hidden" name="evidenceId" value={item.id} />
-                  <input type="hidden" name="type" value={item.type} />
-                  <ReferenceSelects
-                    zones={safeZones}
-                    trades={safeTrades}
-                    defaults={{ zoneId: item.zone_id, tradeId: item.trade_id }}
-                    disabled={!canEdit}
-                  />
-                  <label className="field">
-                    <span>Note</span>
-                    <textarea
-                      name="manualNote"
-                      defaultValue={item.manual_note ?? ""}
-                      rows={2}
-                      disabled={!canEdit}
-                    />
-                  </label>
-                  <div className="button-row">
-                    <button type="submit" disabled={!canEdit}>
-                      Save evidence
-                    </button>
-                    {canEdit ? (
-                      <button type="submit" formAction={deleteEvidence} className="danger">
-                        Delete
-                      </button>
-                    ) : null}
-                  </div>
-                </form>
+                {(() => {
+                  const transcription = transcriptionByEvidenceId.get(item.id);
+                  const transcriptionJob = latestJobByEvidenceId.get(item.id);
+                  const isTranscriptionRunning =
+                    transcriptionJob?.status === "pending" ||
+                    transcriptionJob?.status === "processing";
+
+                  return (
+                    <>
+                      <div className="split-row">
+                        <div>
+                          <strong>{item.original_filename}</strong>
+                          <div className="muted">
+                            {item.type} | {item.mime_type} | {formatBytes(item.size_bytes)} |{" "}
+                            {item.zones?.name ?? "No zone"} | {item.trades?.name ?? "No trade"}
+                          </div>
+                        </div>
+                        {item.signedUrl ? (
+                          <a href={item.signedUrl} target="_blank" rel="noreferrer">
+                            Open
+                          </a>
+                        ) : null}
+                      </div>
+                      <EvidencePreview
+                        signedUrl={item.signedUrl}
+                        type={item.type}
+                        filename={item.original_filename}
+                      />
+
+                      {item.type === "audio" ? (
+                        <div className="transcript-panel">
+                          <div className="split-row">
+                            <strong>Transcript</strong>
+                            {transcriptionJob ? (
+                              <span className={`badge status-${transcriptionJob.status}`}>
+                                {transcriptionJob.status}
+                              </span>
+                            ) : null}
+                          </div>
+                          {transcription ? (
+                            <form action={updateAudioTranscription} className="compact-form">
+                              <input type="hidden" name="projectId" value={project.id} />
+                              <input type="hidden" name="visitId" value={visit.id} />
+                              <input
+                                type="hidden"
+                                name="transcriptionId"
+                                value={transcription.id}
+                              />
+                              <p className="muted">
+                                {transcription.provider ?? "unknown"} |{" "}
+                                {transcription.model ?? "unknown"}
+                                {transcription.language ? ` | ${transcription.language}` : ""}
+                              </p>
+                              <label className="field">
+                                <span>Reviewed transcript</span>
+                                <textarea
+                                  name="editedTranscript"
+                                  defaultValue={
+                                    transcription.edited_transcript ?? transcription.raw_transcript
+                                  }
+                                  rows={5}
+                                  disabled={!canEdit}
+                                />
+                              </label>
+                              <button type="submit" disabled={!canEdit}>
+                                Save transcript
+                              </button>
+                            </form>
+                          ) : (
+                            <>
+                              {transcriptionJob?.error_message ? (
+                                <p className="notice error">{transcriptionJob.error_message}</p>
+                              ) : null}
+                              {canEdit ? (
+                                <form action={enqueueAudioTranscription}>
+                                  <input type="hidden" name="projectId" value={project.id} />
+                                  <input type="hidden" name="visitId" value={visit.id} />
+                                  <input type="hidden" name="evidenceId" value={item.id} />
+                                  <button type="submit" disabled={isTranscriptionRunning}>
+                                    {isTranscriptionRunning
+                                      ? "Transcription queued"
+                                      : "Transcribe audio"}
+                                  </button>
+                                </form>
+                              ) : (
+                                <p className="muted">No transcript yet.</p>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      ) : null}
+
+                      <form action={updateEvidence} className="inline-edit">
+                        <input type="hidden" name="projectId" value={project.id} />
+                        <input type="hidden" name="visitId" value={visit.id} />
+                        <input type="hidden" name="evidenceId" value={item.id} />
+                        <input type="hidden" name="type" value={item.type} />
+                        <ReferenceSelects
+                          zones={safeZones}
+                          trades={safeTrades}
+                          defaults={{ zoneId: item.zone_id, tradeId: item.trade_id }}
+                          disabled={!canEdit}
+                        />
+                        <label className="field">
+                          <span>Note</span>
+                          <textarea
+                            name="manualNote"
+                            defaultValue={item.manual_note ?? ""}
+                            rows={2}
+                            disabled={!canEdit}
+                          />
+                        </label>
+                        <div className="button-row">
+                          <button type="submit" disabled={!canEdit}>
+                            Save evidence
+                          </button>
+                          {canEdit ? (
+                            <button type="submit" formAction={deleteEvidence} className="danger">
+                              Delete
+                            </button>
+                          ) : null}
+                        </div>
+                      </form>
+                    </>
+                  );
+                })()}
               </li>
             ))}
           </ul>

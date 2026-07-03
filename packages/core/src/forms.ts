@@ -5,6 +5,7 @@ import {
   evidenceTypeSchema,
   projectRoleSchema,
   projectStatusSchema,
+  prioritySchema,
   visitStatusSchema,
 } from "./enums";
 import { isoDateSchema, nonEmptyStringSchema, uuidSchema } from "./validators";
@@ -124,6 +125,57 @@ export const evidenceMetadataSchema = z.object({
   manualNote: optionalTrimmedText,
 });
 export type EvidenceMetadataInput = z.infer<typeof evidenceMetadataSchema>;
+
+export const audioTranscriptionEditSchema = z.object({
+  editedTranscript: optionalTrimmedText,
+});
+export type AudioTranscriptionEditInput = z.infer<typeof audioTranscriptionEditSchema>;
+
+export const summaryReviewActionSchema = z.enum(["approve", "edit", "reject"]);
+export type SummaryReviewAction = z.infer<typeof summaryReviewActionSchema>;
+
+export const summaryReviewFormSchema = z.object({
+  action: summaryReviewActionSchema,
+  summary: optionalTrimmedText,
+});
+export type SummaryReviewFormInput = z.infer<typeof summaryReviewFormSchema>;
+
+export const issueReviewActionSchema = z.enum(["approve", "edit", "reject", "close"]);
+export type IssueReviewAction = z.infer<typeof issueReviewActionSchema>;
+
+export const issueReviewFormSchema = z.object({
+  action: issueReviewActionSchema,
+  title: nonEmptyStringSchema.max(220),
+  description: optionalTrimmedText,
+  priority: prioritySchema,
+  zoneId: nullableUuidSchema,
+  tradeId: nullableUuidSchema,
+  contractItemId: nullableUuidSchema,
+  costRisk: shortOptionalTrimmedText,
+  scheduleRisk: shortOptionalTrimmedText,
+});
+export type IssueReviewFormInput = z.infer<typeof issueReviewFormSchema>;
+
+export const decisionReviewActionSchema = z.enum(["approve", "edit", "reject", "close"]);
+export type DecisionReviewAction = z.infer<typeof decisionReviewActionSchema>;
+
+export const decisionReviewFormSchema = z.object({
+  action: decisionReviewActionSchema,
+  title: nonEmptyStringSchema.max(220),
+  description: optionalTrimmedText,
+  priority: prioritySchema,
+  zoneId: nullableUuidSchema,
+  tradeId: nullableUuidSchema,
+  deadline: z
+    .union([isoDateSchema, z.literal("")])
+    .nullish()
+    .transform((value) => (value ? value : null)),
+  optionsText: optionalTrimmedText,
+  recommendation: optionalTrimmedText,
+  costImpact: shortOptionalTrimmedText,
+  scheduleImpact: shortOptionalTrimmedText,
+});
+export type DecisionReviewFormInput = z.infer<typeof decisionReviewFormSchema>;
 
 export function evidenceTypeFromMimeType(mimeType: string): z.infer<typeof evidenceTypeSchema> {
   if (mimeType.startsWith("image/")) return "photo";

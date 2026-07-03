@@ -4,10 +4,14 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import {
+  audioTranscriptionEditSchema,
   evidenceMetadataSchema,
   evidenceMimeTypeMatchesType,
+  transcribeAudioJobInputSchema,
   uuidSchema,
   visitFormSchema,
+  visitTextExtractionJobInputSchema,
+  visitTextExtractionJobTypeSchema,
   visitStatusTransitionSchema,
 } from "@reforma/core";
 
@@ -57,6 +61,14 @@ function requireEvidenceId(formData: FormData, projectId: string, visitId: strin
   const parsed = uuidSchema.safeParse(formData.get("evidenceId"));
   if (!parsed.success) {
     visitRedirect(projectId, visitId, { error: "Invalid evidence item." });
+  }
+  return parsed.data;
+}
+
+function requireTranscriptionId(formData: FormData, projectId: string, visitId: string): string {
+  const parsed = uuidSchema.safeParse(formData.get("transcriptionId"));
+  if (!parsed.success) {
+    visitRedirect(projectId, visitId, { error: "Invalid transcription." });
   }
   return parsed.data;
 }
@@ -139,7 +151,7 @@ export async function createVisit(formData: FormData): Promise<void> {
 export async function updateVisit(formData: FormData): Promise<void> {
   const projectId = requireProjectId(formData);
   const visitId = requireVisitId(formData, projectId);
-  const { supabase } = await requireUser();
+  const { supabase, user } = await requireUser();
   const parsed = readVisitForm(formData);
 
   if (!parsed.success) {
@@ -147,6 +159,42 @@ export async function updateVisit(formData: FormData): Promise<void> {
       error: parsed.error.issues[0]?.message ?? "Invalid input.",
     });
   }
+
+  const { data: existingVisit, error: existingVisitError } = await supabase
+    .from("visits")
+    .select("summary, summary_source, summary_review_state, summary_created_by_job_id")
+    .eq("id", visitId)
+    .eq("project_id", projectId)
+    .maybeSingle();
+
+  if (existingVisitError) {
+    visitRedirect(projectId, visitId, { error: existingVisitError.message });
+  }
+  if (!existingVisit) {
+    visitRedirect(projectId, visitId, { error: "Visit not found." });
+  }
+
+  const summaryChanged = parsed.data.summary !== existingVisit.summary;
+  const summaryReviewChanges =
+    summaryChanged && existingVisit.summary_source === "ai"
+      ? {
+          summary_source: "ai",
+          summary_review_state: parsed.data.summary ? "edited" : "rejected",
+          summary_created_by_job_id: parsed.data.summary
+            ? existingVisit.summary_created_by_job_id
+            : null,
+          summary_reviewed_by: user.id,
+          summary_reviewed_at: new Date().toISOString(),
+        }
+      : summaryChanged
+        ? {
+            summary_source: "human",
+            summary_review_state: "human_created",
+            summary_created_by_job_id: null,
+            summary_reviewed_by: null,
+            summary_reviewed_at: null,
+          }
+        : {};
 
   const { data, error } = await supabase
     .from("visits")
@@ -158,6 +206,7 @@ export async function updateVisit(formData: FormData): Promise<void> {
       human_notes: parsed.data.humanNotes,
       primary_zone_id: parsed.data.primaryZoneId,
       primary_trade_id: parsed.data.primaryTradeId,
+      ...summaryReviewChanges,
     })
     .eq("id", visitId)
     .eq("project_id", projectId)
@@ -172,7 +221,26 @@ export async function updateVisit(formData: FormData): Promise<void> {
     });
   }
 
+  if (summaryChanged && existingVisit.summary_source === "ai") {
+    const { error: auditError } = await supabase.from("audit_log").insert({
+      project_id: projectId,
+      actor_user_id: user.id,
+      action: parsed.data.summary ? "summary.edited" : "summary.rejected",
+      entity_type: "visit",
+      entity_id: visitId,
+      metadata: {
+        previousReviewState: existingVisit.summary_review_state,
+        newReviewState: summaryReviewChanges.summary_review_state,
+      },
+    });
+
+    if (auditError) {
+      visitRedirect(projectId, visitId, { error: auditError.message });
+    }
+  }
+
   revalidatePath(`/projects/${projectId}/visits`);
+  revalidatePath(`/projects/${projectId}`);
   visitRedirect(projectId, visitId, { ok: "Visit updated." });
 }
 
@@ -420,4 +488,163 @@ export async function deleteEvidence(formData: FormData): Promise<void> {
 
   revalidatePath(`/projects/${projectId}/visits`);
   visitRedirect(projectId, visitId, { ok: "Evidence deleted." });
+}
+
+export async function enqueueAudioTranscription(formData: FormData): Promise<void> {
+  const projectId = requireProjectId(formData);
+  const visitId = requireVisitId(formData, projectId);
+  const evidenceId = requireEvidenceId(formData, projectId, visitId);
+  const { supabase, user } = await requireUser();
+
+  const { data: evidence, error: evidenceError } = await supabase
+    .from("evidence")
+    .select("id, type, mime_type")
+    .eq("id", evidenceId)
+    .eq("project_id", projectId)
+    .eq("visit_id", visitId)
+    .maybeSingle();
+
+  if (evidenceError) {
+    visitRedirect(projectId, visitId, { error: evidenceError.message });
+  }
+  if (!evidence || evidence.type !== "audio" || !evidence.mime_type.startsWith("audio/")) {
+    visitRedirect(projectId, visitId, { error: "Only audio evidence can be transcribed." });
+  }
+
+  const { data: existingTranscription } = await supabase
+    .from("audio_transcriptions")
+    .select("id")
+    .eq("evidence_id", evidenceId)
+    .maybeSingle();
+
+  if (existingTranscription) {
+    visitRedirect(projectId, visitId, { ok: "This audio already has a transcript." });
+  }
+
+  const { data: existingJobs, error: existingJobsError } = await supabase
+    .from("agent_jobs")
+    .select("id")
+    .eq("project_id", projectId)
+    .eq("type", "transcribe_audio")
+    .in("status", ["pending", "processing"])
+    .contains("input", { evidenceId })
+    .limit(1);
+
+  if (existingJobsError) {
+    visitRedirect(projectId, visitId, { error: existingJobsError.message });
+  }
+  if ((existingJobs ?? []).length > 0) {
+    visitRedirect(projectId, visitId, { ok: "A transcription job is already queued." });
+  }
+
+  const input = transcribeAudioJobInputSchema.parse({ evidenceId });
+  const { data, error } = await supabase
+    .from("agent_jobs")
+    .insert({
+      project_id: projectId,
+      type: "transcribe_audio",
+      input,
+      created_by: user.id,
+    })
+    .select("id");
+
+  if (error) {
+    visitRedirect(projectId, visitId, { error: error.message });
+  }
+  if (!data || data.length === 0) {
+    visitRedirect(projectId, visitId, {
+      error: "You do not have permission to enqueue transcription jobs.",
+    });
+  }
+
+  revalidatePath(`/projects/${projectId}/visits`);
+  visitRedirect(projectId, visitId, { ok: "Transcription job queued." });
+}
+
+export async function enqueueVisitTextExtraction(formData: FormData): Promise<void> {
+  const projectId = requireProjectId(formData);
+  const visitId = requireVisitId(formData, projectId);
+  const parsedJobType = visitTextExtractionJobTypeSchema.safeParse(formData.get("jobType"));
+  const { supabase, user } = await requireUser();
+
+  if (!parsedJobType.success) {
+    visitRedirect(projectId, visitId, { error: "Invalid text extraction job." });
+  }
+  if (!(await assertVisitBelongsToProject(projectId, visitId))) {
+    visitsRedirect(projectId, { error: "Visit not found." });
+  }
+
+  const input = visitTextExtractionJobInputSchema.parse({ visitId });
+  const { data: existingJobs, error: existingJobsError } = await supabase
+    .from("agent_jobs")
+    .select("id")
+    .eq("project_id", projectId)
+    .eq("type", parsedJobType.data)
+    .in("status", ["pending", "processing"])
+    .contains("input", input)
+    .limit(1);
+
+  if (existingJobsError) {
+    visitRedirect(projectId, visitId, { error: existingJobsError.message });
+  }
+  if ((existingJobs ?? []).length > 0) {
+    visitRedirect(projectId, visitId, { ok: "A text extraction job is already queued." });
+  }
+
+  const { data, error } = await supabase
+    .from("agent_jobs")
+    .insert({
+      project_id: projectId,
+      type: parsedJobType.data,
+      input,
+      created_by: user.id,
+    })
+    .select("id");
+
+  if (error) {
+    visitRedirect(projectId, visitId, { error: error.message });
+  }
+  if (!data || data.length === 0) {
+    visitRedirect(projectId, visitId, {
+      error: "You do not have permission to enqueue text extraction jobs.",
+    });
+  }
+
+  revalidatePath(`/projects/${projectId}/visits`);
+  visitRedirect(projectId, visitId, { ok: "Text extraction job queued." });
+}
+
+export async function updateAudioTranscription(formData: FormData): Promise<void> {
+  const projectId = requireProjectId(formData);
+  const visitId = requireVisitId(formData, projectId);
+  const transcriptionId = requireTranscriptionId(formData, projectId, visitId);
+  const { supabase } = await requireUser();
+  const parsed = audioTranscriptionEditSchema.safeParse({
+    editedTranscript: formData.get("editedTranscript"),
+  });
+
+  if (!parsed.success) {
+    visitRedirect(projectId, visitId, {
+      error: parsed.error.issues[0]?.message ?? "Invalid transcript.",
+    });
+  }
+
+  const { data, error } = await supabase
+    .from("audio_transcriptions")
+    .update({ edited_transcript: parsed.data.editedTranscript })
+    .eq("id", transcriptionId)
+    .eq("project_id", projectId)
+    .select("id");
+
+  if (error) {
+    visitRedirect(projectId, visitId, { error: error.message });
+  }
+  if (!data || data.length === 0) {
+    visitRedirect(projectId, visitId, {
+      error: "You do not have permission to update this transcript.",
+    });
+  }
+
+  revalidatePath(`/projects/${projectId}/visits`);
+  visitRedirect(projectId, visitId, { ok: "Transcript updated." });
 }

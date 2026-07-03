@@ -47,6 +47,31 @@ NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:55321
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<publishable key from supabase status>
 ```
 
+For the worker, export server-only variables in your shell or a local process manager:
+
+```bash
+SUPABASE_URL=http://127.0.0.1:55321
+SUPABASE_SERVICE_ROLE_KEY=<secret/service role key from supabase status>
+WORKER_POLL_INTERVAL_MS=5000
+```
+
+Without `SUPABASE_SERVICE_ROLE_KEY`, the worker logs that it is disabled and exits cleanly so
+local web development can still run. Without an AI API key, Phase 5 uses `MockAiProvider` and
+stores deterministic mock transcripts; Phase 6 also uses deterministic mock summaries, issue
+drafts and decision drafts. To use real OpenAI-backed processing, configure:
+
+```bash
+OPENAI_API_KEY=<your OpenAI API key>
+OPENAI_TRANSCRIPTION_MODEL=gpt-4o-mini-transcribe
+OPENAI_TEXT_MODEL=gpt-4o-mini
+```
+
+Run one polling pass for local smoke tests:
+
+```bash
+WORKER_RUN_ONCE=true pnpm --filter @reforma/worker dev
+```
+
 Seeded test users (local only): `ana@example.com` (owner) and `luis@example.com` (editor),
 password `password123`.
 
@@ -57,6 +82,22 @@ Phase 4 creates a private `visit-evidence` Storage bucket. Evidence uploads are 
 and accept common image, audio, video, PDF, text, CSV and Office document MIME types. Evidence
 files are linked to visits and can optionally reference a zone and trade. Photos are evidence
 only; no OCR, AI vision or photo analysis runs in Phase 4.
+
+Phase 5 adds audio transcription jobs. Editors enqueue `transcribe_audio` from audio evidence on
+the visit detail page. The worker writes to `audio_transcriptions`, and editors can review/edit
+the transcript in the same visit screen. Phase 5 still does not process photos, OCR documents,
+extract issues/decisions or generate summaries.
+
+Phase 6 adds text extraction jobs on the same visit detail page:
+`generate_visit_summary`, `suggest_issues` and `suggest_decisions`. The worker uses only visit
+notes, edited transcripts, zones/trades, document metadata and budget metadata. It does not
+download photos or documents, does not OCR, and does not analyze images. Generated issues and
+decisions are `ai_draft` rows for later human review.
+
+Phase 7 adds the project dashboard and human review actions. Open
+`/projects/<project_id>` to see recent visits, open issues, pending decisions, AI drafts and the
+audit log. Owner/admin/editor roles can approve, edit, reject and close AI drafts; viewers remain
+read-only through RLS.
 
 Example budget CSV:
 

@@ -2,16 +2,20 @@ import { describe, expect, it } from "vitest";
 
 import {
   addMemberSchema,
+  audioTranscriptionEditSchema,
   contractItemFormSchema,
+  decisionReviewFormSchema,
   documentMetadataSchema,
   evidenceMetadataSchema,
   evidenceMimeTypeMatchesType,
   evidenceTypeFromMimeType,
+  issueReviewFormSchema,
   parseBudgetCsv,
   projectFormSchema,
   projectSettingsSchema,
   signInSchema,
   signUpSchema,
+  summaryReviewFormSchema,
   visitFormSchema,
   visitStatusTransitionSchema,
   zoneTradeFormSchema,
@@ -234,5 +238,109 @@ describe("evidence MIME helpers", () => {
   it("rejects a type/MIME mismatch", () => {
     expect(evidenceMimeTypeMatchesType("image/png", "photo")).toBe(true);
     expect(evidenceMimeTypeMatchesType("image/png", "audio")).toBe(false);
+  });
+});
+
+describe("audioTranscriptionEditSchema", () => {
+  it("normalizes edited transcript text", () => {
+    expect(audioTranscriptionEditSchema.parse({ editedTranscript: "  Looks good. " })).toEqual({
+      editedTranscript: "Looks good.",
+    });
+  });
+
+  it("stores empty edits as null", () => {
+    expect(audioTranscriptionEditSchema.parse({ editedTranscript: "" })).toEqual({
+      editedTranscript: null,
+    });
+  });
+});
+
+describe("summaryReviewFormSchema", () => {
+  it("accepts summary review actions and normalizes text", () => {
+    expect(
+      summaryReviewFormSchema.parse({ action: "edit", summary: "  Work looks good. " }),
+    ).toEqual({
+      action: "edit",
+      summary: "Work looks good.",
+    });
+  });
+
+  it("rejects unknown summary review actions", () => {
+    expect(summaryReviewFormSchema.safeParse({ action: "close", summary: "" }).success).toBe(false);
+  });
+});
+
+describe("issueReviewFormSchema", () => {
+  it("accepts issue review edits with optional references", () => {
+    const parsed = issueReviewFormSchema.parse({
+      action: "edit",
+      title: "  Confirm moisture source ",
+      description: "",
+      priority: "high",
+      zoneId: "",
+      tradeId: "",
+      contractItemId: "",
+      costRisk: "  possible variation ",
+      scheduleRisk: "",
+    });
+
+    expect(parsed).toMatchObject({
+      action: "edit",
+      title: "Confirm moisture source",
+      description: null,
+      priority: "high",
+      zoneId: null,
+      tradeId: null,
+      contractItemId: null,
+      costRisk: "possible variation",
+      scheduleRisk: null,
+    });
+  });
+
+  it("rejects issue edits without a title", () => {
+    expect(
+      issueReviewFormSchema.safeParse({ action: "edit", title: "", priority: "medium" }).success,
+    ).toBe(false);
+  });
+});
+
+describe("decisionReviewFormSchema", () => {
+  it("accepts decision review edits with a nullable deadline", () => {
+    const parsed = decisionReviewFormSchema.parse({
+      action: "approve",
+      title: "Choose tiles",
+      description: "Owner needs to choose.",
+      priority: "medium",
+      zoneId: "",
+      tradeId: "",
+      deadline: "",
+      optionsText: "Quartz\nLaminate",
+      recommendation: "Choose quartz.",
+      costImpact: "",
+      scheduleImpact: "May block ordering.",
+    });
+
+    expect(parsed).toMatchObject({
+      action: "approve",
+      title: "Choose tiles",
+      priority: "medium",
+      zoneId: null,
+      tradeId: null,
+      deadline: null,
+      optionsText: "Quartz\nLaminate",
+      costImpact: null,
+      scheduleImpact: "May block ordering.",
+    });
+  });
+
+  it("rejects invalid decision deadlines", () => {
+    expect(
+      decisionReviewFormSchema.safeParse({
+        action: "edit",
+        title: "Choose tiles",
+        priority: "medium",
+        deadline: "07/03/2026",
+      }).success,
+    ).toBe(false);
   });
 });

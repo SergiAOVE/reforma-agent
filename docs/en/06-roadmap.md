@@ -8,9 +8,9 @@ Phase 1 — Supabase schema, enums, RLS, seed. Done.
 Phase 2 — Auth, profiles, projects, memberships. Done.
 Phase 3 — Zones, trades, documents, contract_items. Done.
 Phase 4 — Visits and evidence uploads. Done.
-Phase 5 — Worker, agent_jobs, audio transcription.
-Phase 6 — Textual AI extraction: summaries, issue drafts, decision drafts.
-Phase 7 — Review workflow and dashboard.
+Phase 5 — Worker, agent_jobs, audio transcription. Done.
+Phase 6 — Textual AI extraction: summaries, issue drafts, decision drafts. Done.
+Phase 7 — Review workflow and dashboard. Done.
 Phase 8 — Weekly summary.
 Phase 9 — Deployment docs.
 Phase 10 — Optional Telegram gateway.
