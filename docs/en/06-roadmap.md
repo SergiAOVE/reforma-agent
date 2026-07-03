@@ -14,7 +14,7 @@ Phase 7 — Review workflow and dashboard. Done.
 Phase 8 — Weekly summary. Done.
 Phase 9 — Deployment docs. Done.
 Phase 10 — Optional Telegram gateway. Done.
-Phase 11 — Optional NanoClaw gateway.
+Phase 11 — Optional NanoClaw gateway. Done.
 Phase 12 — Optional document intelligence.
 ```
 

@@ -53,13 +53,15 @@ pnpm build
 
 More detail in [docs/en/05-local-development.md](docs/en/05-local-development.md). Deployment
 guidance lives in [docs/en/07-deployment.md](docs/en/07-deployment.md). The optional Telegram
-gateway is documented in [docs/en/08-telegram-gateway.md](docs/en/08-telegram-gateway.md).
+gateway is documented in [docs/en/08-telegram-gateway.md](docs/en/08-telegram-gateway.md), and
+the optional NanoClaw gateway is documented in
+[docs/en/09-nanoclaw-gateway.md](docs/en/09-nanoclaw-gateway.md).
 
 ## Project status
 
-**Implemented through Phase 10**: MVP schema, auth, project setup, visits/evidence, worker jobs,
+**Implemented through Phase 11**: MVP schema, auth, project setup, visits/evidence, worker jobs,
 text-only AI drafts, review workflow, weekly summaries, deployment documentation and an optional
-Telegram gateway contract. See [PLAN.md](PLAN.md) for the phased roadmap.
+Telegram/NanoClaw gateway contract. See [PLAN.md](PLAN.md) for the phased roadmap.
 
 ## Security and privacy
 

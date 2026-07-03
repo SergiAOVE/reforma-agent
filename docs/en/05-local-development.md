@@ -130,7 +130,8 @@ Migrations live in `supabase/migrations/` (enums → tables → RLS) and the see
 [03-security-privacy.md](03-security-privacy.md).
 
 Production deployment guidance lives in [07-deployment.md](07-deployment.md). The optional
-Telegram gateway is documented in [08-telegram-gateway.md](08-telegram-gateway.md).
+Telegram gateway is documented in [08-telegram-gateway.md](08-telegram-gateway.md), and the
+optional NanoClaw gateway is documented in [09-nanoclaw-gateway.md](09-nanoclaw-gateway.md).
 
 ## Conventions
 

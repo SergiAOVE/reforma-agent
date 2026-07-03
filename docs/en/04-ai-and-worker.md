@@ -36,6 +36,9 @@ Phase 10 does not add worker job types. The optional Telegram gateway only forwa
 text-command intents to first-party server APIs; it does not enqueue AI work and does not run AI
 inside web requests.
 
+Phase 11 does not add worker job types. The optional NanoClaw gateway follows the same pattern:
+validated text-command intents only, no worker enqueueing and no AI work inside web requests.
+
 ## What AI can do
 
 - Transcribe audio evidence through `transcribe_audio` jobs.
@@ -220,3 +223,10 @@ Telegram is not part of the AI pipeline. It cannot submit photos for analysis, c
 OCR, cannot create drafts directly and cannot write to Supabase. Any future Telegram action that
 creates project data must call a first-party API that authenticates the app user, checks project
 membership and produces the same reviewable drafts as the web app and worker flows.
+
+## Phase 11 NanoClaw boundary
+
+NanoClaw is not part of the AI pipeline. It cannot submit files for OCR, cannot analyze images,
+cannot create drafts directly, cannot enqueue worker jobs and cannot write to Supabase. Any future
+NanoClaw action that creates project data must call a first-party API that authenticates the app
+user, checks project membership and keeps all AI outputs reviewable.

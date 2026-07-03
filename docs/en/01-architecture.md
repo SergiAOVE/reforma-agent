@@ -11,8 +11,8 @@
         ▲                                  │ agent_jobs (polling)
         │ optional gateway                 │
 ┌───────┴─────────────┐        ┌───────────▼──────────────┐
-│ Telegram Bot API    │        │  apps/worker             │
-│ webhook relay only  │        │  Node/TypeScript         │
+│ Optional gateways   │        │  apps/worker             │
+│ Telegram/NanoClaw   │        │  Node/TypeScript         │
 └─────────────────────┘        │  transcription, text AI  │
                                └──────────────────────────┘
 ```
@@ -45,5 +45,5 @@
   direct calls, so they stay independently deployable and testable.
 - Every AI output is validated with Zod before persisting; if validation fails, the job is marked
   as failed and no inconsistent data is created.
-- Integrations (Telegram now, NanoClaw only if a later phase requests it) enter as gateways
-  against first-party APIs, never writing directly to the database.
+- Integrations (Telegram and NanoClaw) enter as gateways against first-party APIs, never writing
+  directly to the database.

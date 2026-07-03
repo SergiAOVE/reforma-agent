@@ -57,13 +57,17 @@ host's secret store.
 | `TELEGRAM_BOT_TOKEN`            | yes | no                | yes     | Optional Phase 10 bot token for chat replies. Never expose to the browser.      |
 | `TELEGRAM_GATEWAY_API_URL`      | yes | no                | no/yes  | First-party API endpoint for normalized Telegram commands.                      |
 | `TELEGRAM_GATEWAY_API_TOKEN`    | yes | no                | yes     | Bearer token shared by the webhook route and first-party gateway API.           |
+| `NANOCLAW_WEBHOOK_TOKEN`        | yes | no                | yes     | Optional Phase 11 bearer token NanoClaw must send to the web webhook route.     |
+| `NANOCLAW_GATEWAY_API_URL`      | yes | no                | no/yes  | First-party API endpoint for normalized NanoClaw commands.                      |
+| `NANOCLAW_GATEWAY_API_TOKEN`    | yes | no                | yes     | Bearer token shared by the NanoClaw webhook route and first-party API.          |
 
 Security rules:
 
 - Only `NEXT_PUBLIC_*` values may reach the browser.
 - `SUPABASE_SERVICE_ROLE_KEY`, `OPENAI_API_KEY` and `AI_PROVIDER_API_KEY` belong only in the
   worker or trusted operational scripts.
-- Telegram variables are server-only web runtime secrets. Do not use `NEXT_PUBLIC_` for them.
+- Telegram and NanoClaw variables are server-only web runtime secrets. Do not use `NEXT_PUBLIC_`
+  for them.
 - Do not reuse production Supabase secrets in preview deployments unless the preview is fully
   trusted.
 
@@ -156,11 +160,14 @@ TELEGRAM_WEBHOOK_SECRET=<random-secret-token>
 TELEGRAM_BOT_TOKEN=<botfather-token>
 TELEGRAM_GATEWAY_API_URL=https://<web-domain>/api/gateway/telegram/commands
 TELEGRAM_GATEWAY_API_TOKEN=<random-bearer-token>
+# Optional Phase 11 NanoClaw gateway
+NANOCLAW_WEBHOOK_TOKEN=<random-bearer-token-from-nanoclaw-to-webhook>
+NANOCLAW_GATEWAY_API_URL=https://<web-domain>/api/gateway/nanoclaw/commands
+NANOCLAW_GATEWAY_API_TOKEN=<random-bearer-token-for-first-party-api>
 ```
 
 Do not configure `SUPABASE_SERVICE_ROLE_KEY` on the Vercel web project. The code in `apps/web`
-does not need it. Telegram secrets are unrelated to Supabase and do not authorize database
-writes.
+does not need it. Gateway secrets are unrelated to Supabase and do not authorize database writes.
 
 Recommended deploy sequence:
 
@@ -263,6 +270,45 @@ Supported commands are `/start`, `/help`, `/status` and `/visit <note>`. In Phas
 is a validated intent only; it does not create a visit row. Use the web app for project data
 entry, uploads and review workflows.
 
+## Optional NanoClaw gateway
+
+Phase 11 adds two web routes:
+
+| Route                                 | Purpose                                                          |
+| ------------------------------------- | ---------------------------------------------------------------- |
+| `POST /api/nanoclaw/webhook`          | Receives NanoClaw events, validates bearer auth, relays command  |
+| `POST /api/gateway/nanoclaw/commands` | First-party command contract endpoint, protected by bearer token |
+
+The gateway is optional. If the NanoClaw environment variables are absent, the webhook route
+reports that it is not configured. The gateway does not use Supabase credentials and does not
+write project data directly.
+
+The expected NanoClaw raw-handler payload is:
+
+```json
+{
+  "eventId": "nc_evt_123",
+  "agentGroupId": "renovation-agent",
+  "conversationId": "thread-456",
+  "senderId": "operator-789",
+  "text": "/status",
+  "metadata": {
+    "channel": "cli"
+  }
+}
+```
+
+NanoClaw must call the webhook with:
+
+```bash
+Authorization: Bearer $NANOCLAW_WEBHOOK_TOKEN
+Content-Type: application/json
+```
+
+Supported commands are `/help`, `/status`, `/visit <note>`, `/issue <note>`,
+`/decision <note>` and `/weekly-summary <range>`. In Phase 11, all commands are validated
+intents only; they do not create rows or enqueue AI jobs.
+
 ## Storage buckets
 
 The migrations create two private buckets:
@@ -359,12 +405,12 @@ Before real renovation data enters the system:
 - Data API grants for new public tables are explicit and paired with RLS.
 - Storage buckets are private and Storage RLS policies exist.
 - The worker host has restart policy, log retention and alerting on crashes.
-- Optional Telegram secrets are configured only when the gateway is used, and they are not
-  browser-visible.
+- Optional Telegram/NanoClaw secrets are configured only when the gateway is used, and they are
+  not browser-visible.
 - Supabase backups are enabled and a restore drill has been performed.
 - Production and preview environments do not accidentally share databases.
-- No NanoClaw, OCR, image analysis or document intelligence service is configured as part of the
-  MVP deployment.
+- No OCR, image analysis or document intelligence service is configured as part of the MVP
+  deployment.
 
 ## Rollback guidance
 

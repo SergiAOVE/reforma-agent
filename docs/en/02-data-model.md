@@ -177,6 +177,13 @@ and `storage_object_visit_id(name)` parses the second segment for visit evidence
 - Owner/admin/editor roles can approve, edit or reject weekly summary drafts from the dashboard.
   Review actions update `reviewed_by`/`reviewed_at` and write `audit_log` entries.
 
+## Phases 10-11 optional gateways
+
+Telegram and NanoClaw add no project tables, Storage buckets, SQL functions, enums or RLS
+policies. They are stateless web gateways that validate external payloads and forward normalized
+command intents to first-party server APIs. They do not write directly to Supabase, do not upload
+files, do not enqueue worker jobs and do not change the data model.
+
 ## Design notes
 
 - **Every project data table carries `project_id`** with `on delete cascade`: deleting a project

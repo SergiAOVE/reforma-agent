@@ -200,6 +200,27 @@ Telegram media messages are rejected with a text response. This prevents Telegra
 documents, audio and video from becoming an alternate upload path that bypasses the existing web
 app validation, private Storage policies and evidence metadata rules.
 
+## Optional NanoClaw gateway security (Phase 11)
+
+NanoClaw is implemented as an optional webhook relay, not as a database client:
+
+- NanoClaw calls `POST /api/nanoclaw/webhook` from a raw handler or equivalent integration.
+- The route requires `Authorization: Bearer <NANOCLAW_WEBHOOK_TOKEN>`.
+- The route parses only a narrow text-command JSON contract and forwards a normalized payload to
+  the configured first-party API in `NANOCLAW_GATEWAY_API_URL`.
+- The first-party endpoint requires `Authorization: Bearer <NANOCLAW_GATEWAY_API_TOKEN>`.
+- Neither route imports a Supabase client, reads `SUPABASE_SERVICE_ROLE_KEY` or writes project
+  rows directly.
+
+The Phase 11 first-party endpoint acknowledges `/help`, `/status`, `/visit <note>`,
+`/issue <note>`, `/decision <note>` and `/weekly-summary <range>` intents but does not create
+visits, evidence, issues, decisions, weekly summaries or AI jobs. Real project mutations from
+NanoClaw require a later, explicit account-linking and user-scoped API design that preserves
+`project_members` authorization and RLS semantics.
+
+NanoClaw payloads are text-only in Phase 11. This prevents NanoClaw from becoming an alternate
+document intelligence, OCR, image analysis or upload path.
+
 ## Human review security (Phase 7)
 
 - Review actions are normal Next.js server actions using the signed-in user's publishable-key
@@ -233,9 +254,9 @@ central multi-tenant service: each renovation's data stays under the control of 
 
 ## Status
 
-Phases 1–10 done: schema + RLS in migrations, auth and membership management live in the web app,
+Phases 1–11 done: schema + RLS in migrations, auth and membership management live in the web app,
 private project document Storage and private visit evidence Storage are implemented, the
 service-role worker can transcribe audio evidence and generate reviewable text drafts through
 `agent_jobs`, project members can review AI drafts and weekly summaries with audit logging, and
-the optional Telegram gateway is constrained to first-party server APIs with no direct Supabase
-writes.
+the optional Telegram and NanoClaw gateways are constrained to first-party server APIs with no
+direct Supabase writes.

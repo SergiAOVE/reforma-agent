@@ -16,10 +16,25 @@ A phase is only marked as completed if the checks (lint, typecheck, test, build)
 - [x] **Phase 8 — Weekly summary**: `generate_weekly_summary` job with a reviewable draft.
 - [x] **Phase 9 — Deployment docs.**
 - [x] **Phase 10 — Optional: Telegram gateway.**
-- [ ] **Phase 11 — Optional: NanoClaw gateway.**
+- [x] **Phase 11 — Optional: NanoClaw gateway.**
 - [ ] **Phase 12 — Optional: document intelligence.**
 
 ## Completed phases log
+
+### Phase 11 — 2026-07-03
+
+Optional NanoClaw gateway implemented without schema changes, worker changes or new core
+dependencies. New `packages/core/src/nanoclaw.ts` defines the narrow NanoClaw raw-webhook event
+contract, command parsing, runtime config validation and first-party command payload schemas.
+`apps/web` now exposes `POST /api/nanoclaw/webhook`, which validates a NanoClaw bearer token,
+accepts only text-command JSON events and forwards normalized command intents to a configured
+first-party API with a separate bearer token. `POST /api/gateway/nanoclaw/commands` is the Phase
+11 first-party command contract; it acknowledges `/help`, `/status`, `/visit <note>`,
+`/issue <note>`, `/decision <note>` and `/weekly-summary <range>` but does not create project
+rows, write Supabase data, upload files, enqueue AI jobs or bypass RLS. NanoClaw variables were
+added to `.env.example`; documentation now covers deployment, security and setup in
+`docs/en/09-nanoclaw-gateway.md`. No OCR, image analysis, document intelligence or new AI jobs
+were added.
 
 ### Phase 10 — 2026-07-03
 
