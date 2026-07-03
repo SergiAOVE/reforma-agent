@@ -15,11 +15,25 @@ A phase is only marked as completed if the checks (lint, typecheck, test, build)
 - [x] **Phase 7 — Dashboard and human review**: dashboard, approve/edit/reject drafts, audit log.
 - [x] **Phase 8 — Weekly summary**: `generate_weekly_summary` job with a reviewable draft.
 - [x] **Phase 9 — Deployment docs.**
-- [ ] **Phase 10 — Optional: Telegram gateway.**
+- [x] **Phase 10 — Optional: Telegram gateway.**
 - [ ] **Phase 11 — Optional: NanoClaw gateway.**
 - [ ] **Phase 12 — Optional: document intelligence.**
 
 ## Completed phases log
+
+### Phase 10 — 2026-07-03
+
+Optional Telegram gateway implemented without schema changes or new core dependencies. New
+`packages/core/src/telegram.ts` defines the narrow Telegram Bot API update subset, command
+parsing, runtime config validation and first-party command payload schemas. `apps/web` now exposes
+`POST /api/telegram/webhook`, which validates Telegram's webhook secret header, accepts only text
+commands and forwards normalized command intents to a configured first-party API with a bearer
+token. `POST /api/gateway/telegram/commands` is the Phase 10 first-party command contract; it
+acknowledges `/start`, `/help`, `/status` and `/visit <note>` but does not create project rows,
+write Supabase data, upload files, enqueue AI jobs or bypass RLS. Telegram variables were added to
+`.env.example`; documentation now covers deployment, security and setup in
+`docs/en/08-telegram-gateway.md`. No NanoClaw, OCR, image analysis or document intelligence was
+added.
 
 ### Phase 9 — 2026-07-03
 

@@ -8,11 +8,12 @@
 │  Next.js App Router │◄──────►│  Auth · Postgres · RLS   │
 │  Mobile-first PWA   │        │  Private Storage         │
 └─────────────────────┘        └───────────┬──────────────┘
-                                           │ agent_jobs (polling)
-                               ┌───────────▼──────────────┐
-                               │  apps/worker             │
-                               │  Node/TypeScript         │
-                               │  transcription, text AI  │
+        ▲                                  │ agent_jobs (polling)
+        │ optional gateway                 │
+┌───────┴─────────────┐        ┌───────────▼──────────────┐
+│ Telegram Bot API    │        │  apps/worker             │
+│ webhook relay only  │        │  Node/TypeScript         │
+└─────────────────────┘        │  transcription, text AI  │
                                └──────────────────────────┘
 ```
 
@@ -22,6 +23,8 @@
 - **apps/worker**: processes `agent_jobs` asynchronously (transcription, textual extraction,
   summaries) with locking, retries and idempotency. It uses the service role key, which never
   reaches the browser.
+- **Optional gateways**: normalize third-party messages and call first-party server APIs. They do
+  not write directly to Supabase and are not part of the core data path.
 
 ## Shared packages
 
@@ -42,5 +45,5 @@
   direct calls, so they stay independently deployable and testable.
 - Every AI output is validated with Zod before persisting; if validation fails, the job is marked
   as failed and no inconsistent data is created.
-- Future integrations (Telegram, NanoClaw) will enter as gateways against a first-party API,
-  never writing directly to the database.
+- Integrations (Telegram now, NanoClaw only if a later phase requests it) enter as gateways
+  against first-party APIs, never writing directly to the database.

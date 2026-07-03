@@ -129,7 +129,8 @@ Migrations live in `supabase/migrations/` (enums → tables → RLS) and the see
 `supabase/seed/seed.sql`. See [02-data-model.md](02-data-model.md) and
 [03-security-privacy.md](03-security-privacy.md).
 
-Production deployment guidance lives in [07-deployment.md](07-deployment.md).
+Production deployment guidance lives in [07-deployment.md](07-deployment.md). The optional
+Telegram gateway is documented in [08-telegram-gateway.md](08-telegram-gateway.md).
 
 ## Conventions
 

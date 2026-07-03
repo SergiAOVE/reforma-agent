@@ -9,7 +9,7 @@
 
 | Part          | Runtime                   | Purpose                                                          |
 | ------------- | ------------------------- | ---------------------------------------------------------------- |
-| `apps/web`    | Next.js App Router        | Authenticated PWA, uploads, dashboards and review UI             |
+| `apps/web`    | Next.js App Router        | Authenticated PWA, uploads, dashboards, review UI and gateways   |
 | Supabase      | Hosted Supabase project   | Auth, Postgres, private Storage and RLS                          |
 | `apps/worker` | Always-on Node.js process | Polls `agent_jobs`, transcribes audio and runs text-only AI jobs |
 
@@ -53,12 +53,17 @@ host's secret store.
 | `OPENAI_TRANSCRIPTION_MODEL`    | no  | optional          | no      | Default `gpt-4o-mini-transcribe`.                                               |
 | `OPENAI_TEXT_MODEL`             | no  | optional          | no      | Default `gpt-4o-mini`.                                                          |
 | `OPENAI_BASE_URL`               | no  | optional          | no/yes  | Optional compatible API base URL. Treat as sensitive if private.                |
+| `TELEGRAM_WEBHOOK_SECRET`       | yes | no                | yes     | Optional Phase 10 webhook header secret. Never prefix with `NEXT_PUBLIC_`.      |
+| `TELEGRAM_BOT_TOKEN`            | yes | no                | yes     | Optional Phase 10 bot token for chat replies. Never expose to the browser.      |
+| `TELEGRAM_GATEWAY_API_URL`      | yes | no                | no/yes  | First-party API endpoint for normalized Telegram commands.                      |
+| `TELEGRAM_GATEWAY_API_TOKEN`    | yes | no                | yes     | Bearer token shared by the webhook route and first-party gateway API.           |
 
 Security rules:
 
 - Only `NEXT_PUBLIC_*` values may reach the browser.
 - `SUPABASE_SERVICE_ROLE_KEY`, `OPENAI_API_KEY` and `AI_PROVIDER_API_KEY` belong only in the
   worker or trusted operational scripts.
+- Telegram variables are server-only web runtime secrets. Do not use `NEXT_PUBLIC_` for them.
 - Do not reuse production Supabase secrets in preview deployments unless the preview is fully
   trusted.
 
@@ -146,10 +151,16 @@ Environment variables for the Vercel web project:
 ```bash
 NEXT_PUBLIC_SUPABASE_URL=https://<project-ref>.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<publishable-or-anon-key>
+# Optional Phase 10 Telegram gateway
+TELEGRAM_WEBHOOK_SECRET=<random-secret-token>
+TELEGRAM_BOT_TOKEN=<botfather-token>
+TELEGRAM_GATEWAY_API_URL=https://<web-domain>/api/gateway/telegram/commands
+TELEGRAM_GATEWAY_API_TOKEN=<random-bearer-token>
 ```
 
 Do not configure `SUPABASE_SERVICE_ROLE_KEY` on the Vercel web project. The code in `apps/web`
-does not need it.
+does not need it. Telegram secrets are unrelated to Supabase and do not authorize database
+writes.
 
 Recommended deploy sequence:
 
@@ -225,6 +236,32 @@ Smoke test a deployed worker:
 3. Confirm `agent_jobs.status` moves from `pending` to `processing` to `completed`.
 4. Confirm the expected draft row appears and remains reviewable.
 5. Confirm failed jobs carry a safe `error_message` and retry only up to `max_attempts`.
+
+## Optional Telegram gateway
+
+Phase 10 adds two web routes:
+
+| Route                                 | Purpose                                                                 |
+| ------------------------------------- | ----------------------------------------------------------------------- |
+| `POST /api/telegram/webhook`          | Receives Telegram updates, validates the webhook secret, relays command |
+| `POST /api/gateway/telegram/commands` | First-party command contract endpoint, protected by bearer token        |
+
+The gateway is optional. If the Telegram environment variables are absent, the webhook route
+reports that it is not configured. The gateway does not use Supabase credentials and does not
+write project data directly.
+
+Set the webhook after deploying the web app:
+
+```bash
+curl -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook" \
+  -d "url=https://<web-domain>/api/telegram/webhook" \
+  -d "secret_token=$TELEGRAM_WEBHOOK_SECRET" \
+  -d 'allowed_updates=["message","edited_message"]'
+```
+
+Supported commands are `/start`, `/help`, `/status` and `/visit <note>`. In Phase 10, `/visit`
+is a validated intent only; it does not create a visit row. Use the web app for project data
+entry, uploads and review workflows.
 
 ## Storage buckets
 
@@ -322,10 +359,12 @@ Before real renovation data enters the system:
 - Data API grants for new public tables are explicit and paired with RLS.
 - Storage buckets are private and Storage RLS policies exist.
 - The worker host has restart policy, log retention and alerting on crashes.
+- Optional Telegram secrets are configured only when the gateway is used, and they are not
+  browser-visible.
 - Supabase backups are enabled and a restore drill has been performed.
 - Production and preview environments do not accidentally share databases.
-- No Telegram, NanoClaw, OCR, image analysis or document intelligence service is configured as
-  part of the MVP deployment.
+- No NanoClaw, OCR, image analysis or document intelligence service is configured as part of the
+  MVP deployment.
 
 ## Rollback guidance
 

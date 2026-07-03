@@ -16,6 +16,8 @@
 - **Role-based permissions**: owner, admin, editor and viewer with differentiated capabilities.
 - **Traceability**: `audit_log` records relevant actions (publishing, approving or rejecting AI
   drafts, membership changes).
+- **Gateway containment**: optional third-party gateways call first-party server APIs and never
+  receive direct Supabase credentials.
 
 ## Roles
 
@@ -177,6 +179,27 @@ worker polling or automatic issue/decision extraction.
 
 Phases 6–8 do not implement OCR, AI vision, photo analysis, Telegram or NanoClaw.
 
+## Optional Telegram gateway security (Phase 10)
+
+Telegram is implemented as an optional webhook relay, not as a database client:
+
+- Telegram calls `POST /api/telegram/webhook`.
+- The route validates `X-Telegram-Bot-Api-Secret-Token` against `TELEGRAM_WEBHOOK_SECRET`.
+- The route parses only a narrow text-command subset and forwards a normalized payload to the
+  configured first-party API in `TELEGRAM_GATEWAY_API_URL`.
+- The first-party endpoint requires `Authorization: Bearer <TELEGRAM_GATEWAY_API_TOKEN>`.
+- Neither route imports a Supabase client, reads `SUPABASE_SERVICE_ROLE_KEY` or writes project
+  rows directly.
+
+The Phase 10 first-party endpoint acknowledges `/start`, `/help`, `/status` and `/visit <note>`
+intents but does not create visits, evidence, issues, decisions or AI jobs. Real project
+mutations from Telegram require a later, explicit account-linking and user-scoped API design that
+preserves `project_members` authorization and RLS semantics.
+
+Telegram media messages are rejected with a text response. This prevents Telegram photos,
+documents, audio and video from becoming an alternate upload path that bypasses the existing web
+app validation, private Storage policies and evidence metadata rules.
+
 ## Human review security (Phase 7)
 
 - Review actions are normal Next.js server actions using the signed-in user's publishable-key
@@ -210,7 +233,9 @@ central multi-tenant service: each renovation's data stays under the control of 
 
 ## Status
 
-Phases 1–8 done: schema + RLS in migrations, auth and membership management live in the web app,
-private project document Storage and private visit evidence Storage are implemented, and the
+Phases 1–10 done: schema + RLS in migrations, auth and membership management live in the web app,
+private project document Storage and private visit evidence Storage are implemented, the
 service-role worker can transcribe audio evidence and generate reviewable text drafts through
-`agent_jobs`; project members can now review AI drafts and weekly summaries with audit logging.
+`agent_jobs`, project members can review AI drafts and weekly summaries with audit logging, and
+the optional Telegram gateway is constrained to first-party server APIs with no direct Supabase
+writes.

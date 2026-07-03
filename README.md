@@ -52,19 +52,21 @@ pnpm build
 ```
 
 More detail in [docs/en/05-local-development.md](docs/en/05-local-development.md). Deployment
-guidance lives in [docs/en/07-deployment.md](docs/en/07-deployment.md).
+guidance lives in [docs/en/07-deployment.md](docs/en/07-deployment.md). The optional Telegram
+gateway is documented in [docs/en/08-telegram-gateway.md](docs/en/08-telegram-gateway.md).
 
 ## Project status
 
-**Implemented through Phase 9**: MVP schema, auth, project setup, visits/evidence, worker jobs,
-text-only AI drafts, review workflow, weekly summaries and deployment documentation. See
-[PLAN.md](PLAN.md) for the phased roadmap.
+**Implemented through Phase 10**: MVP schema, auth, project setup, visits/evidence, worker jobs,
+text-only AI drafts, review workflow, weekly summaries, deployment documentation and an optional
+Telegram gateway contract. See [PLAN.md](PLAN.md) for the phased roadmap.
 
 ## Security and privacy
 
 - RLS enabled on all project data tables (from Phase 1).
 - Private storage; access via signed URLs.
 - The service role key is never exposed to the client.
+- Optional gateways call first-party server APIs; they do not write directly to Supabase.
 - No real data in tests or seeds; synthetic data only.
 - Each user deploys their own instance with their own Supabase project.
 

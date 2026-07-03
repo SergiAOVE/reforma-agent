@@ -32,6 +32,10 @@ The worker implements (Phase 5+):
 | `suggest_decisions`       | Pending decision drafts               | 6     |
 | `generate_weekly_summary` | Weekly summary for owners             | 8     |
 
+Phase 10 does not add worker job types. The optional Telegram gateway only forwards validated
+text-command intents to first-party server APIs; it does not enqueue AI work and does not run AI
+inside web requests.
+
 ## What AI can do
 
 - Transcribe audio evidence through `transcribe_audio` jobs.
@@ -209,3 +213,10 @@ The completed job output stores the created row id and provider metadata:
   "model": "model name"
 }
 ```
+
+## Phase 10 Telegram boundary
+
+Telegram is not part of the AI pipeline. It cannot submit photos for analysis, cannot trigger
+OCR, cannot create drafts directly and cannot write to Supabase. Any future Telegram action that
+creates project data must call a first-party API that authenticates the app user, checks project
+membership and produces the same reviewable drafts as the web app and worker flows.
