@@ -1,7 +1,13 @@
 import { z } from "zod";
 
-import { documentTypeSchema, projectRoleSchema, projectStatusSchema } from "./enums";
-import { nonEmptyStringSchema, uuidSchema } from "./validators";
+import {
+  documentTypeSchema,
+  evidenceTypeSchema,
+  projectRoleSchema,
+  projectStatusSchema,
+  visitStatusSchema,
+} from "./enums";
+import { isoDateSchema, nonEmptyStringSchema, uuidSchema } from "./validators";
 
 /**
  * Form schemas shared by the web UI (client hints) and server actions
@@ -94,6 +100,44 @@ export const contractItemFormSchema = z.object({
   notes: optionalTrimmedText,
 });
 export type ContractItemFormInput = z.infer<typeof contractItemFormSchema>;
+
+export const visitFormSchema = z.object({
+  title: nonEmptyStringSchema.max(180),
+  visitDate: isoDateSchema,
+  generalStatus: shortOptionalTrimmedText,
+  summary: optionalTrimmedText,
+  humanNotes: optionalTrimmedText,
+  primaryZoneId: nullableUuidSchema,
+  primaryTradeId: nullableUuidSchema,
+});
+export type VisitFormInput = z.infer<typeof visitFormSchema>;
+
+export const visitStatusTransitionSchema = z.object({
+  status: visitStatusSchema,
+});
+export type VisitStatusTransitionInput = z.infer<typeof visitStatusTransitionSchema>;
+
+export const evidenceMetadataSchema = z.object({
+  type: evidenceTypeSchema,
+  zoneId: nullableUuidSchema,
+  tradeId: nullableUuidSchema,
+  manualNote: optionalTrimmedText,
+});
+export type EvidenceMetadataInput = z.infer<typeof evidenceMetadataSchema>;
+
+export function evidenceTypeFromMimeType(mimeType: string): z.infer<typeof evidenceTypeSchema> {
+  if (mimeType.startsWith("image/")) return "photo";
+  if (mimeType.startsWith("audio/")) return "audio";
+  if (mimeType.startsWith("video/")) return "video";
+  return "document";
+}
+
+export function evidenceMimeTypeMatchesType(
+  mimeType: string,
+  type: z.infer<typeof evidenceTypeSchema>,
+): boolean {
+  return evidenceTypeFromMimeType(mimeType) === type;
+}
 
 const csvOptionalText = z
   .string()

@@ -36,6 +36,8 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
     { count: tradeCount },
     { count: documentCount },
     { count: itemCount },
+    { count: visitCount },
+    { count: evidenceCount },
   ] = await Promise.all([
     supabase
       .from("zones")
@@ -51,6 +53,14 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
       .eq("project_id", project.id),
     supabase
       .from("contract_items")
+      .select("id", { count: "exact", head: true })
+      .eq("project_id", project.id),
+    supabase
+      .from("visits")
+      .select("id", { count: "exact", head: true })
+      .eq("project_id", project.id),
+    supabase
+      .from("evidence")
       .select("id", { count: "exact", head: true })
       .eq("project_id", project.id),
   ]);
@@ -80,7 +90,7 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
         </ul>
         {canManage ? (
           <p>
-            <Link href={`/projects/${project.id}/settings`}>Manage project & members →</Link>
+            <Link href={`/projects/${project.id}/settings`}>Manage project & members -&gt;</Link>
           </p>
         ) : null}
       </div>
@@ -89,7 +99,7 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
         <Link className="card nav-card" href={`/projects/${project.id}/setup`}>
           <h2>Zones & trades</h2>
           <p className="muted">
-            {zoneCount ?? 0} zones · {tradeCount ?? 0} trades
+            {zoneCount ?? 0} zones | {tradeCount ?? 0} trades
           </p>
         </Link>
         <Link className="card nav-card" href={`/projects/${project.id}/documents`}>
@@ -100,10 +110,12 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
           <h2>Budget items</h2>
           <p className="muted">{itemCount ?? 0} contract line items</p>
         </Link>
-        <div className="card">
+        <Link className="card nav-card" href={`/projects/${project.id}/visits`}>
           <h2>Visits & evidence</h2>
-          <p className="muted">Coming in Phase 4.</p>
-        </div>
+          <p className="muted">
+            {visitCount ?? 0} visits | {evidenceCount ?? 0} evidence files
+          </p>
+        </Link>
         <div className="card">
           <h2>AI summaries</h2>
           <p className="muted">Coming in Phase 5+.</p>

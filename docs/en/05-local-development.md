@@ -53,6 +53,11 @@ password `password123`.
 Phase 3 creates a private `project-documents` Storage bucket. Document uploads are capped at
 10 MB by the bucket configuration and by the web form. Budget CSV imports are capped at 512 KB.
 
+Phase 4 creates a private `visit-evidence` Storage bucket. Evidence uploads are capped at 50 MB
+and accept common image, audio, video, PDF, text, CSV and Office document MIME types. Evidence
+files are linked to visits and can optionally reference a zone and trade. Photos are evidence
+only; no OCR, AI vision or photo analysis runs in Phase 4.
+
 Example budget CSV:
 
 ```csv

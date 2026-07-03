@@ -9,7 +9,7 @@ A phase is only marked as completed if the checks (lint, typecheck, test, build)
 - [x] **Phase 1 — Data model**: Supabase schema, enums, migrations, base RLS, synthetic seed.
 - [x] **Phase 2 — Auth and projects**: Supabase Auth, profiles, projects, memberships and roles.
 - [x] **Phase 3 — Project setup**: zones, trades, documents, contract_items (+ CSV import).
-- [ ] **Phase 4 — Visits and evidence**: visits, photo/audio uploads, private storage, signed URLs.
+- [x] **Phase 4 — Visits and evidence**: visits, photo/audio uploads, private storage, signed URLs.
 - [ ] **Phase 5 — Worker and transcription**: agent_jobs, polling, locking, retries, audio transcription.
 - [ ] **Phase 6 — Textual AI extraction**: summaries, issue drafts and decision drafts (`ai_draft`).
 - [ ] **Phase 7 — Dashboard and human review**: dashboard, approve/edit/reject drafts, audit log.
@@ -20,6 +20,22 @@ A phase is only marked as completed if the checks (lint, typecheck, test, build)
 - [ ] **Phase 12 — Optional: document intelligence.**
 
 ## Completed phases log
+
+### Phase 4 — 2026-07-03
+
+Visits and evidence implemented in the web app: `/projects/[projectId]/visits` for creating and
+reviewing site visits, and `/projects/[projectId]/visits/[visitId]` for editing details,
+publishing, archiving, returning to draft, deleting visits, uploading evidence, previewing
+signed evidence links and editing evidence metadata. Owner/admin/editor roles can write; viewers
+are read-only in the UI and RLS remains the final authority. New migration creates the private
+`visit-evidence` bucket, Storage RLS policies for member access and editor writes, and a
+`storage_object_visit_id()` helper so uploads must point at an existing visit in the same project.
+Evidence files support photo, audio, video and document types, optional zone/trade links, MIME
+checks and a 50 MB limit. Photos remain evidence only: no OCR, AI vision, photo analysis,
+transcription, worker polling or automatic extraction was added. `packages/core` gained visit and
+evidence Zod schemas plus MIME helpers (64 tests total); `packages/db` types regenerated from the
+local schema. Checks green: `supabase db reset`, `supabase db lint --local`, migration list,
+functional Storage/RLS smoke test, lint, typecheck, test, build.
 
 ### Phase 3 — 2026-07-03
 

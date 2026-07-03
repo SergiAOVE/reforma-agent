@@ -969,6 +969,7 @@ export type Database = {
       is_project_member: { Args: { p_project_id: string }; Returns: boolean };
       shares_project_with: { Args: { p_user_id: string }; Returns: boolean };
       storage_object_project_id: { Args: { p_name: string }; Returns: string };
+      storage_object_visit_id: { Args: { p_name: string }; Returns: string };
     };
     Enums: {
       decision_status: "ai_draft" | "pending" | "approved" | "rejected" | "superseded" | "closed";

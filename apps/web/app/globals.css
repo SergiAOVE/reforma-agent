@@ -238,6 +238,25 @@ button.link {
   line-height: 1.4;
 }
 
+.evidence-preview,
+.media-control {
+  display: block;
+  width: 100%;
+  max-height: 22rem;
+  margin-top: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #f0efeb;
+}
+
+.evidence-preview {
+  object-fit: contain;
+}
+
+.media-control {
+  min-height: 2.75rem;
+}
+
 .badge {
   display: inline-block;
   font-size: 0.75rem;

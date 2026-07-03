@@ -3,11 +3,11 @@
 The up-to-date phase-by-phase status lives in [PLAN.md](../../PLAN.md). Summary:
 
 ```text
-Phase 0 — Bootstrap repo, docs, monorepo, checks.
-Phase 1 — Supabase schema, enums, RLS, seed.
-Phase 2 — Auth, profiles, projects, memberships.
-Phase 3 — Zones, trades, documents, contract_items.
-Phase 4 — Visits and evidence uploads.
+Phase 0 — Bootstrap repo, docs, monorepo, checks. Done.
+Phase 1 — Supabase schema, enums, RLS, seed. Done.
+Phase 2 — Auth, profiles, projects, memberships. Done.
+Phase 3 — Zones, trades, documents, contract_items. Done.
+Phase 4 — Visits and evidence uploads. Done.
 Phase 5 — Worker, agent_jobs, audio transcription.
 Phase 6 — Textual AI extraction: summaries, issue drafts, decision drafts.
 Phase 7 — Review workflow and dashboard.

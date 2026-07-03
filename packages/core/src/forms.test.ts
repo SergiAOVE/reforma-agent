@@ -4,11 +4,16 @@ import {
   addMemberSchema,
   contractItemFormSchema,
   documentMetadataSchema,
+  evidenceMetadataSchema,
+  evidenceMimeTypeMatchesType,
+  evidenceTypeFromMimeType,
   parseBudgetCsv,
   projectFormSchema,
   projectSettingsSchema,
   signInSchema,
   signUpSchema,
+  visitFormSchema,
+  visitStatusTransitionSchema,
   zoneTradeFormSchema,
 } from "./forms";
 
@@ -155,5 +160,79 @@ K01,"Kitchen, cabinets",Base units,Carpentry,Kitchen,2,unit,1200,2400,included,4
 
     expect(result.items).toEqual([]);
     expect(result.errors[0]).toMatch(/^Row 2:/);
+  });
+});
+
+describe("visitFormSchema", () => {
+  it("accepts a dated visit and normalizes optional fields", () => {
+    const parsed = visitFormSchema.parse({
+      title: " Week 8 visit ",
+      visitDate: "2026-07-03",
+      generalStatus: "  progressing ",
+      summary: "",
+      humanNotes: undefined,
+      primaryZoneId: "",
+      primaryTradeId: "",
+    });
+
+    expect(parsed).toEqual({
+      title: "Week 8 visit",
+      visitDate: "2026-07-03",
+      generalStatus: "progressing",
+      summary: null,
+      humanNotes: null,
+      primaryZoneId: null,
+      primaryTradeId: null,
+    });
+  });
+
+  it("rejects non-ISO dates", () => {
+    expect(visitFormSchema.safeParse({ title: "Visit", visitDate: "03/07/2026" }).success).toBe(
+      false,
+    );
+  });
+});
+
+describe("visitStatusTransitionSchema", () => {
+  it("only accepts known visit statuses", () => {
+    expect(visitStatusTransitionSchema.safeParse({ status: "published" }).success).toBe(true);
+    expect(visitStatusTransitionSchema.safeParse({ status: "deleted" }).success).toBe(false);
+  });
+});
+
+describe("evidenceMetadataSchema", () => {
+  it("normalizes optional visit evidence references", () => {
+    const parsed = evidenceMetadataSchema.parse({
+      type: "photo",
+      zoneId: "",
+      tradeId: "",
+      manualNote: "  Sink wall before tiling ",
+    });
+
+    expect(parsed).toEqual({
+      type: "photo",
+      zoneId: null,
+      tradeId: null,
+      manualNote: "Sink wall before tiling",
+    });
+  });
+});
+
+describe("evidence MIME helpers", () => {
+  it("maps common MIME families to evidence types", () => {
+    expect(evidenceTypeFromMimeType("image/jpeg")).toBe("photo");
+    expect(evidenceTypeFromMimeType("audio/webm")).toBe("audio");
+    expect(evidenceTypeFromMimeType("video/mp4")).toBe("video");
+    expect(evidenceTypeFromMimeType("application/pdf")).toBe("document");
+    expect(
+      evidenceTypeFromMimeType(
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      ),
+    ).toBe("document");
+  });
+
+  it("rejects a type/MIME mismatch", () => {
+    expect(evidenceMimeTypeMatchesType("image/png", "photo")).toBe(true);
+    expect(evidenceMimeTypeMatchesType("image/png", "audio")).toBe(false);
   });
 });

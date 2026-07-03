@@ -1,6 +1,6 @@
 # Data model
 
-> Status: **implemented through Phase 3**. Source of truth:
+> Status: **implemented through Phase 4**. Source of truth:
 > [supabase/migrations/](../../supabase/migrations/) — enums, tables and RLS are fully
 > commented there. TypeScript mirrors live in
 > [packages/core/src/enums.ts](../../packages/core/src/enums.ts); form and CSV validators live in
@@ -57,6 +57,8 @@ erDiagram
     projects ||--o{ contract_items : ""
     projects ||--o{ agent_jobs : ""
     projects ||--o{ audit_log : ""
+    zones ||--o{ evidence : "optional"
+    trades ||--o{ evidence : "optional"
     visits ||--o{ evidence : ""
     evidence ||--o{ audio_transcriptions : "if audio"
     visits ||--o{ issues : ""
@@ -79,15 +81,17 @@ Phase 2 added two RPCs the web app calls via PostgREST (see
 
 ## Storage
 
-Phase 3 creates one private bucket:
+Phases 3 and 4 create two private buckets:
 
-| Bucket              | Purpose                                      | Path convention                       |
-| ------------------- | -------------------------------------------- | ------------------------------------- |
-| `project-documents` | Plans, quotes, invoices, warranties, annexes | `<project_id>/<uuid>-<safe-filename>` |
+| Bucket              | Purpose                                               | Path convention                                  |
+| ------------------- | ----------------------------------------------------- | ------------------------------------------------ |
+| `project-documents` | Plans, quotes, invoices, warranties, annexes          | `<project_id>/<uuid>-<safe-filename>`            |
+| `visit-evidence`    | Photos, audio, video and document evidence for visits | `<project_id>/<visit_id>/<uuid>-<safe-filename>` |
 
-The `documents.storage_path` column stores the exact object path. Server components generate
-short-lived signed URLs for members; files are never public. The helper
-`storage_object_project_id(name)` safely parses the first folder segment for Storage RLS.
+The `documents.storage_path` and `evidence.storage_path` columns store the exact object path.
+Server components generate short-lived signed URLs for members; files are never public. The
+helper `storage_object_project_id(name)` safely parses the first folder segment for Storage RLS,
+and `storage_object_visit_id(name)` parses the second segment for visit evidence uploads.
 
 ## Phase 3 screens and validators
 
@@ -98,6 +102,17 @@ short-lived signed URLs for members; files are never public. The helper
   `code,title,description,trade,zone,quantity,unit,unit_price,total_amount,included_excluded,source_page,notes`.
   `trade` and `zone` values must match existing project setup names; imports never create setup
   data implicitly.
+
+## Phase 4 screens and validators
+
+- `/projects/[projectId]/visits`: create visits and review the visit log.
+- `/projects/[projectId]/visits/[visitId]`: edit visit details, publish/archive/draft visits,
+  upload evidence, preview signed evidence links and edit evidence metadata.
+- Evidence files can be `photo`, `audio`, `video` or `document` and may link to an optional zone
+  and trade. Upload MIME type, size and metadata are validated in server actions with Zod helpers
+  from `packages/core`.
+- Photos are stored and displayed only as evidence. Phase 4 does not add OCR, AI vision, photo
+  analysis, transcription, worker polling or automatic issue/decision extraction.
 
 ## Design notes
 

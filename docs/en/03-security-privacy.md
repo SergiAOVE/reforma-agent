@@ -26,11 +26,12 @@
 | editor | Create setup data, documents, budget items, visits, evidence, issues and decisions |
 | viewer | Read only                                                                          |
 
-## RLS implementation (Phases 1–3)
+## RLS implementation (Phases 1–4)
 
 Implemented in [20260702120200_enable_rls.sql](../../supabase/migrations/20260702120200_enable_rls.sql)
-and [20260703090000_phase2_membership_helpers.sql](../../supabase/migrations/20260703090000_phase2_membership_helpers.sql)
+and [20260703090000_phase2_membership_helpers.sql](../../supabase/migrations/20260703090000_phase2_membership_helpers.sql),
 [20260703171533_phase3_project_setup_storage.sql](../../supabase/migrations/20260703171533_phase3_project_setup_storage.sql)
+and [20260703175220_phase4_visit_evidence_storage.sql](../../supabase/migrations/20260703175220_phase4_visit_evidence_storage.sql)
 (every policy is commented in the SQL). Summary:
 
 **Helper functions** — `SECURITY DEFINER`, `STABLE`, pinned `search_path`, execute revoked from
@@ -45,6 +46,7 @@ without recursing into their own policy:
 | `is_project_creator(project_id)`    | Current user created the project (bootstrap)   |
 | `shares_project_with(user_id)`      | Both users belong to some common project       |
 | `storage_object_project_id(path)`   | First Storage path segment parsed as a UUID    |
+| `storage_object_visit_id(path)`     | Second Storage path segment parsed as a UUID   |
 
 **SQL RPCs (Phase 2)** — called from the web app; they never require the service role:
 
@@ -114,8 +116,31 @@ Storage RLS is on `storage.objects`:
 The web app uploads with the signed-in user's publishable-key session, not the service role.
 Members receive short-lived signed URLs generated on the server. The bucket is not public.
 
-Phase 3 deliberately handles only project documents. Visit evidence (photos/audio/video) remains
-Phase 4, and photos are still evidence only — no AI photo analysis.
+## Private visit evidence storage (Phase 4)
+
+Visit evidence uses the private `visit-evidence` bucket created by
+`20260703175220_phase4_visit_evidence_storage.sql`. Object names must start with the project id
+and visit id:
+
+```text
+<project_id>/<visit_id>/<uuid>-<sanitized-original-filename>
+```
+
+Storage RLS is on `storage.objects`:
+
+| Operation | Policy                                                             |
+| --------- | ------------------------------------------------------------------ |
+| select    | project members may list/read/download files                       |
+| insert    | owner/admin/editor may upload evidence files for an existing visit |
+| update    | owner/admin/editor may update evidence files for an existing visit |
+| delete    | owner/admin/editor may delete evidence files                       |
+
+The web app uploads evidence with the signed-in user's publishable-key session and stores
+metadata in `evidence`. Server components create short-lived signed URLs for project members.
+The bucket accepts photos, audio, video, PDF, text, CSV and Office document files up to 50 MB.
+
+Photos are evidence only. Phase 4 does not perform OCR, AI vision, photo analysis, transcription,
+worker polling or automatic issue/decision extraction.
 
 ## Open source deployment model
 
@@ -124,6 +149,6 @@ central multi-tenant service: each renovation's data stays under the control of 
 
 ## Status
 
-Phases 1–3 done: schema + RLS in migrations, auth and membership management live in the web
-app, and private project document Storage is implemented. Visit evidence Storage policies arrive
-with Phase 4.
+Phases 1–4 done: schema + RLS in migrations, auth and membership management live in the web app,
+private project document Storage is implemented, and private visit evidence Storage is
+implemented.
