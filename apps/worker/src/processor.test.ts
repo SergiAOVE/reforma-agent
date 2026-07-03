@@ -51,14 +51,14 @@ describe("safeErrorMessage", () => {
 });
 
 describe("SUPPORTED_JOB_TYPES", () => {
-  it("includes Phase 5 and Phase 6 worker jobs only", () => {
+  it("includes Phase 5, Phase 6 and Phase 8 worker jobs only", () => {
     expect(SUPPORTED_JOB_TYPES).toEqual([
       "transcribe_audio",
       "generate_visit_summary",
       "suggest_issues",
       "suggest_decisions",
+      "generate_weekly_summary",
     ]);
-    expect(SUPPORTED_JOB_TYPES).not.toContain("generate_weekly_summary");
     expect(SUPPORTED_JOB_TYPES).not.toContain("extract_visit");
   });
 });

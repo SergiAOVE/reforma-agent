@@ -1,7 +1,7 @@
 import { PRIORITIES } from "@reforma/core";
 import type { Json } from "@reforma/db";
 
-import { reviewDecision, reviewIssue, reviewSummary } from "./review-actions";
+import { reviewDecision, reviewIssue, reviewSummary, reviewWeeklySummary } from "./review-actions";
 
 type ReturnTo = "project" | "visit";
 
@@ -22,6 +22,15 @@ interface SummaryReviewVisit {
   visit_date: string;
   summary: string | null;
   summary_review_state: string;
+}
+
+interface WeeklySummaryReviewItem {
+  id: string;
+  week_start: string;
+  week_end: string;
+  title: string;
+  summary: string;
+  review_state: string;
 }
 
 interface IssueReviewItem {
@@ -164,6 +173,65 @@ export function SummaryReviewForm({
           defaultValue={visit.summary ?? ""}
           rows={4}
           maxLength={2000}
+          disabled={!canEdit}
+        />
+      </label>
+      <div className="button-row">
+        <button type="submit" name="action" value="edit" disabled={!canEdit}>
+          Save edit
+        </button>
+        <button type="submit" name="action" value="approve" disabled={!canEdit}>
+          Approve
+        </button>
+        <button type="submit" name="action" value="reject" className="danger" disabled={!canEdit}>
+          Reject
+        </button>
+      </div>
+    </form>
+  );
+}
+
+export function WeeklySummaryReviewForm({
+  projectId,
+  weeklySummary,
+  canEdit,
+}: {
+  projectId: string;
+  weeklySummary: WeeklySummaryReviewItem;
+  canEdit: boolean;
+}) {
+  return (
+    <form action={reviewWeeklySummary} className="inline-edit">
+      <input type="hidden" name="projectId" value={projectId} />
+      <input type="hidden" name="weeklySummaryId" value={weeklySummary.id} />
+      <div className="split-row">
+        <div>
+          <strong>{weeklySummary.title}</strong>
+          <div className="muted">
+            {weeklySummary.week_start} to {weeklySummary.week_end}
+          </div>
+        </div>
+        <span className={`badge status-${weeklySummary.review_state}`}>
+          {weeklySummary.review_state}
+        </span>
+      </div>
+      <label className="field">
+        <span>Title</span>
+        <input
+          name="title"
+          defaultValue={weeklySummary.title}
+          required
+          maxLength={180}
+          disabled={!canEdit}
+        />
+      </label>
+      <label className="field">
+        <span>Summary</span>
+        <textarea
+          name="summary"
+          defaultValue={weeklySummary.summary}
+          rows={6}
+          maxLength={5000}
           disabled={!canEdit}
         />
       </label>

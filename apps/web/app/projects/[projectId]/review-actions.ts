@@ -7,6 +7,8 @@ import {
   decisionReviewFormSchema,
   issueReviewFormSchema,
   summaryReviewFormSchema,
+  weeklySummaryRequestSchema,
+  weeklySummaryReviewFormSchema,
   uuidSchema,
 } from "@reforma/core";
 import type { Database, Json } from "@reforma/db";
@@ -16,6 +18,7 @@ import { requireUser } from "../../../lib/auth";
 type IssueUpdate = Database["public"]["Tables"]["issues"]["Update"];
 type DecisionUpdate = Database["public"]["Tables"]["decisions"]["Update"];
 type VisitUpdate = Database["public"]["Tables"]["visits"]["Update"];
+type WeeklySummaryUpdate = Database["public"]["Tables"]["weekly_summaries"]["Update"];
 
 type ReturnTarget =
   { kind: "project"; projectId: string } | { kind: "visit"; projectId: string; visitId: string };
@@ -184,6 +187,128 @@ export async function reviewSummary(formData: FormData): Promise<void> {
   revalidatePath(`/projects/${projectId}`);
   revalidatePath(`/projects/${projectId}/visits/${visitId}`);
   reviewRedirect(target, { ok: "Summary review saved." });
+}
+
+export async function enqueueWeeklySummary(formData: FormData): Promise<void> {
+  const projectId = requireProjectId(formData);
+  const target: ReturnTarget = { kind: "project", projectId };
+  const { supabase, user } = await requireUser();
+  const parsed = weeklySummaryRequestSchema.safeParse({
+    weekStart: formData.get("weekStart"),
+    weekEnd: formData.get("weekEnd"),
+  });
+
+  if (!parsed.success) {
+    reviewRedirect(target, {
+      error: parsed.error.issues[0]?.message ?? "Invalid weekly summary date range.",
+    });
+  }
+
+  const { error } = await supabase.from("agent_jobs").insert({
+    project_id: projectId,
+    type: "generate_weekly_summary",
+    input: parsed.data,
+    created_by: user.id,
+  });
+
+  if (error) {
+    reviewRedirect(target, { error: error.message });
+  }
+
+  revalidatePath(`/projects/${projectId}`);
+  reviewRedirect(target, { ok: "Weekly summary job queued." });
+}
+
+export async function reviewWeeklySummary(formData: FormData): Promise<void> {
+  const projectId = requireProjectId(formData);
+  const target: ReturnTarget = { kind: "project", projectId };
+  const weeklySummaryId = requireUuid(formData, "weeklySummaryId", target);
+  const { supabase, user } = await requireUser();
+  const parsed = weeklySummaryReviewFormSchema.safeParse({
+    action: formData.get("action"),
+    title: formData.get("title"),
+    summary: formData.get("summary"),
+  });
+
+  if (!parsed.success) {
+    reviewRedirect(target, {
+      error: parsed.error.issues[0]?.message ?? "Invalid weekly summary.",
+    });
+  }
+
+  const { data: weeklySummary, error: weeklySummaryError } = await supabase
+    .from("weekly_summaries")
+    .select("id, title, summary, source, review_state")
+    .eq("id", weeklySummaryId)
+    .eq("project_id", projectId)
+    .maybeSingle();
+
+  if (weeklySummaryError) {
+    reviewRedirect(target, { error: weeklySummaryError.message });
+  }
+  if (!weeklySummary) {
+    reviewRedirect(target, { error: "Weekly summary not found." });
+  }
+  if (weeklySummary.source !== "ai") {
+    reviewRedirect(target, { error: "Only AI weekly summaries can be reviewed here." });
+  }
+
+  const action = parsed.data.action;
+  const changes: WeeklySummaryUpdate = {
+    reviewed_at: new Date().toISOString(),
+    reviewed_by: user.id,
+  };
+
+  if (action === "approve") {
+    if (!weeklySummary.summary) {
+      reviewRedirect(target, { error: "A blank weekly summary cannot be approved." });
+    }
+    changes.review_state = "approved";
+  } else if (action === "edit") {
+    if (!parsed.data.summary) {
+      reviewRedirect(target, { error: "Weekly summary text is required." });
+    }
+    changes.title = parsed.data.title;
+    changes.summary = parsed.data.summary;
+    changes.review_state = "edited";
+  } else {
+    changes.review_state = "rejected";
+  }
+
+  const { data, error } = await supabase
+    .from("weekly_summaries")
+    .update(changes)
+    .eq("id", weeklySummaryId)
+    .eq("project_id", projectId)
+    .select("id");
+
+  if (error) {
+    reviewRedirect(target, { error: error.message });
+  }
+  if (!data || data.length === 0) {
+    reviewRedirect(target, {
+      error: "You do not have permission to review this weekly summary.",
+    });
+  }
+
+  const auditError = await writeAuditLog({
+    projectId,
+    actorUserId: user.id,
+    action: `weekly_summary.${pastTense(action)}`,
+    entityType: "weekly_summary",
+    entityId: weeklySummaryId,
+    metadata: {
+      previousReviewState: weeklySummary.review_state,
+      newReviewState: changes.review_state ?? null,
+    },
+  });
+
+  if (auditError) {
+    reviewRedirect(target, { error: auditError });
+  }
+
+  revalidatePath(`/projects/${projectId}`);
+  reviewRedirect(target, { ok: "Weekly summary review saved." });
 }
 
 export async function reviewIssue(formData: FormData): Promise<void> {

@@ -11,7 +11,7 @@ Phase 4 — Visits and evidence uploads. Done.
 Phase 5 — Worker, agent_jobs, audio transcription. Done.
 Phase 6 — Textual AI extraction: summaries, issue drafts, decision drafts. Done.
 Phase 7 — Review workflow and dashboard. Done.
-Phase 8 — Weekly summary.
+Phase 8 — Weekly summary. Done.
 Phase 9 — Deployment docs.
 Phase 10 — Optional Telegram gateway.
 Phase 11 — Optional NanoClaw gateway.

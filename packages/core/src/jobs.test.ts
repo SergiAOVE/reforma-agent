@@ -9,6 +9,9 @@ import {
   suggestIssuesResultSchema,
   transcribeAudioJobInputSchema,
   transcribeAudioJobOutputSchema,
+  weeklySummaryJobInputSchema,
+  weeklySummaryJobOutputSchema,
+  weeklySummaryResultSchema,
   visitSummaryJobOutputSchema,
   visitSummaryResultSchema,
   visitTextExtractionJobInputSchema,
@@ -20,6 +23,8 @@ const transcriptionId = "55555555-5555-4555-8555-555555555555";
 const visitId = "66666666-6666-4666-8666-666666666666";
 const issueId = "77777777-7777-4777-8777-777777777777";
 const decisionId = "88888888-8888-4888-8888-888888888888";
+const weeklySummaryId = "99999999-9999-4999-8999-999999999999";
+const projectId = "11111111-1111-4111-8111-111111111111";
 
 describe("transcribeAudioJobInputSchema", () => {
   it("accepts an evidence id and optional language", () => {
@@ -74,6 +79,29 @@ describe("visitTextExtractionJobInputSchema", () => {
   });
 });
 
+describe("weeklySummaryJobInputSchema", () => {
+  it("accepts a valid weekly summary date range", () => {
+    expect(
+      weeklySummaryJobInputSchema.parse({
+        weekStart: "2026-06-29",
+        weekEnd: "2026-07-05",
+      }),
+    ).toEqual({
+      weekStart: "2026-06-29",
+      weekEnd: "2026-07-05",
+    });
+  });
+
+  it("rejects reversed weekly summary date ranges", () => {
+    expect(
+      weeklySummaryJobInputSchema.safeParse({
+        weekStart: "2026-07-05",
+        weekEnd: "2026-06-29",
+      }).success,
+    ).toBe(false);
+  });
+});
+
 describe("visitSummaryResultSchema", () => {
   it("accepts a non-empty summary", () => {
     expect(visitSummaryResultSchema.parse({ summary: "  Work progressed. " })).toEqual({
@@ -83,6 +111,26 @@ describe("visitSummaryResultSchema", () => {
 
   it("rejects empty summaries", () => {
     expect(visitSummaryResultSchema.safeParse({ summary: "   " }).success).toBe(false);
+  });
+});
+
+describe("weeklySummaryResultSchema", () => {
+  it("accepts reviewable weekly summary text", () => {
+    expect(
+      weeklySummaryResultSchema.parse({
+        title: "  Week of June 29 ",
+        summary: "  Kitchen demolition completed and plumbing follow-up remains open. ",
+      }),
+    ).toEqual({
+      title: "Week of June 29",
+      summary: "Kitchen demolition completed and plumbing follow-up remains open.",
+    });
+  });
+
+  it("rejects blank weekly summaries", () => {
+    expect(weeklySummaryResultSchema.safeParse({ title: "Week", summary: " " }).success).toBe(
+      false,
+    );
   });
 });
 
@@ -172,6 +220,21 @@ describe("Phase 6 job output schemas", () => {
       suggestDecisionsJobOutputSchema.safeParse({
         visitId,
         decisionIds: [decisionId],
+        provider: "mock",
+        model: "mock-text",
+      }).success,
+    ).toBe(true);
+  });
+});
+
+describe("Phase 8 job output schemas", () => {
+  it("accepts created weekly summary metadata", () => {
+    expect(
+      weeklySummaryJobOutputSchema.safeParse({
+        weeklySummaryId,
+        projectId,
+        weekStart: "2026-06-29",
+        weekEnd: "2026-07-05",
         provider: "mock",
         model: "mock-text",
       }).success,

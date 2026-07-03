@@ -18,6 +18,8 @@ import {
   summaryReviewFormSchema,
   visitFormSchema,
   visitStatusTransitionSchema,
+  weeklySummaryRequestSchema,
+  weeklySummaryReviewFormSchema,
   zoneTradeFormSchema,
 } from "./forms";
 
@@ -267,6 +269,55 @@ describe("summaryReviewFormSchema", () => {
 
   it("rejects unknown summary review actions", () => {
     expect(summaryReviewFormSchema.safeParse({ action: "close", summary: "" }).success).toBe(false);
+  });
+});
+
+describe("weeklySummaryRequestSchema", () => {
+  it("accepts a valid weekly summary date range", () => {
+    expect(
+      weeklySummaryRequestSchema.parse({
+        weekStart: "2026-06-29",
+        weekEnd: "2026-07-05",
+      }),
+    ).toEqual({
+      weekStart: "2026-06-29",
+      weekEnd: "2026-07-05",
+    });
+  });
+
+  it("rejects a reversed weekly summary date range", () => {
+    expect(
+      weeklySummaryRequestSchema.safeParse({
+        weekStart: "2026-07-05",
+        weekEnd: "2026-06-29",
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe("weeklySummaryReviewFormSchema", () => {
+  it("accepts weekly summary review edits", () => {
+    expect(
+      weeklySummaryReviewFormSchema.parse({
+        action: "edit",
+        title: "  Week 27 summary ",
+        summary: "  Main risks are plumbing and countertop timing. ",
+      }),
+    ).toEqual({
+      action: "edit",
+      title: "Week 27 summary",
+      summary: "Main risks are plumbing and countertop timing.",
+    });
+  });
+
+  it("rejects unknown weekly summary review actions", () => {
+    expect(
+      weeklySummaryReviewFormSchema.safeParse({
+        action: "close",
+        title: "Week",
+        summary: "",
+      }).success,
+    ).toBe(false);
   });
 });
 

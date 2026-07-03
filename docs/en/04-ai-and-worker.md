@@ -16,6 +16,7 @@ The worker implements (Phase 5+):
 - Concurrent-safe polling with `FOR UPDATE SKIP LOCKED`.
 - Idempotent audio transcription through a unique `audio_transcriptions.evidence_id` index.
 - Text-only visit extraction for summaries, issue drafts and decision drafts.
+- Text-only weekly summary generation for owner review.
 - Retries with `attempt_count`, `max_attempts` and `error_message`; permanent input errors fail
   without retry.
 - Clear logs without secrets.
@@ -36,7 +37,7 @@ The worker implements (Phase 5+):
 - Transcribe audio evidence through `transcribe_audio` jobs.
 - Summarize visits from text (edited transcription + notes).
 - Propose issues and pending decisions from text.
-- Generate weekly summaries in a later phase.
+- Generate reviewable weekly summaries from project text.
 - Link an issue to a budget line item when there is a clear textual match.
 
 ## What AI can NOT do
@@ -59,9 +60,9 @@ AI outputs must distinguish: facts observed by the user, suspicions, recommendat
 pending confirmation. Outputs are validated with Zod; if validation fails, the job is marked as
 failed and no inconsistent data is persisted.
 
-Phase 7 implements the human side of the flow. Summaries, issues and decisions can be approved,
-edited or rejected; issues and decisions can also be closed. Review actions write `audit_log`
-entries and never call the AI provider.
+Phase 7 implements the human side of the flow for visit summaries, issues and decisions.
+Phase 8 adds weekly summary review. Review actions write `audit_log` entries and never call the
+AI provider.
 
 ## Swappable AI provider
 
@@ -152,3 +153,59 @@ pointing back to the job.
 `suggest_decisions` follows the same pattern for `decisions`. The worker only accepts zone,
 trade and budget references that already exist in the text context; unknown ids fail the job
 before any rows are inserted.
+
+## Phase 8 job contract
+
+`generate_weekly_summary` jobs use this input:
+
+```json
+{
+  "weekStart": "2026-06-29",
+  "weekEnd": "2026-07-05"
+}
+```
+
+Allowed inputs are deliberately text-only:
+
+- Visits in the requested date range: title, date, status, general status and human notes.
+- Reviewed visit summaries only (`approved`, `edited` or human-created), never rejected drafts.
+- Open reviewed issues.
+- Pending or approved reviewed decisions.
+- Zone and trade names/descriptions.
+- Budget line item metadata (`contract_items` title, description, notes, amount and references).
+- Document metadata (`documents` type, title, notes and original filename).
+
+The worker does **not** download Storage files for weekly summaries. It does not OCR documents,
+does not inspect document contents, does not analyze photos and does not use a vision model.
+
+The AI provider validates this shape:
+
+```json
+{
+  "title": "Week 2026-06-29 to 2026-07-05",
+  "summary": "Reviewable weekly summary text"
+}
+```
+
+The worker writes one `weekly_summaries` row per completed job with:
+
+```json
+{
+  "source": "ai",
+  "review_state": "ai_draft",
+  "created_by_job_id": "agent job id"
+}
+```
+
+The completed job output stores the created row id and provider metadata:
+
+```json
+{
+  "weeklySummaryId": "uuid",
+  "projectId": "uuid",
+  "weekStart": "2026-06-29",
+  "weekEnd": "2026-07-05",
+  "provider": "mock | openai",
+  "model": "model name"
+}
+```

@@ -10,6 +10,7 @@ import type {
   SuggestDecisionsResult,
   SuggestIssuesResult,
   VisitSummaryResult,
+  WeeklySummaryResult,
 } from "@reforma/core";
 
 export interface TranscribeAudioInput {
@@ -74,8 +75,85 @@ export interface VisitTextContext {
   }[];
 }
 
+export interface WeeklySummaryContext {
+  project: {
+    id: string;
+    name: string;
+    addressLabel: string | null;
+  };
+  weekStart: string;
+  weekEnd: string;
+  visits: {
+    id: string;
+    title: string;
+    visitDate: string;
+    status: string;
+    generalStatus: string | null;
+    humanNotes: string | null;
+    reviewedSummary: string | null;
+  }[];
+  issues: {
+    id: string;
+    title: string;
+    description: string | null;
+    priority: string;
+    status: string;
+    reviewState: string;
+    zoneName: string | null;
+    tradeName: string | null;
+    costRisk: string | null;
+    scheduleRisk: string | null;
+  }[];
+  decisions: {
+    id: string;
+    title: string;
+    description: string | null;
+    priority: string;
+    status: string;
+    deadline: string | null;
+    reviewState: string;
+    zoneName: string | null;
+    tradeName: string | null;
+    recommendation: string | null;
+    costImpact: string | null;
+    scheduleImpact: string | null;
+  }[];
+  zones: {
+    id: string;
+    name: string;
+    description: string | null;
+  }[];
+  trades: {
+    id: string;
+    name: string;
+    description: string | null;
+  }[];
+  contractItems: {
+    id: string;
+    code: string | null;
+    title: string;
+    description: string | null;
+    tradeId: string | null;
+    zoneId: string | null;
+    totalAmount: number | null;
+    status: string;
+    notes: string | null;
+  }[];
+  documents: {
+    id: string;
+    type: string;
+    title: string;
+    notes: string | null;
+    originalFilename: string;
+  }[];
+}
+
 export interface GenerateVisitSummaryInput {
   context: VisitTextContext;
+}
+
+export interface GenerateWeeklySummaryInput {
+  context: WeeklySummaryContext;
 }
 
 export interface SuggestIssuesInput {
@@ -87,6 +165,11 @@ export interface SuggestDecisionsInput {
 }
 
 export type GenerateVisitSummaryResult = VisitSummaryResult & {
+  provider: string;
+  model: string;
+};
+
+export type GenerateWeeklySummaryResult = WeeklySummaryResult & {
   provider: string;
   model: string;
 };
@@ -105,6 +188,7 @@ export interface AiProvider {
   readonly name: string;
   transcribeAudio(input: TranscribeAudioInput): Promise<TranscribeAudioResult>;
   generateVisitSummary(input: GenerateVisitSummaryInput): Promise<GenerateVisitSummaryResult>;
+  generateWeeklySummary(input: GenerateWeeklySummaryInput): Promise<GenerateWeeklySummaryResult>;
   suggestIssues(input: SuggestIssuesInput): Promise<SuggestIssuesProviderResult>;
   suggestDecisions(input: SuggestDecisionsInput): Promise<SuggestDecisionsProviderResult>;
 }
@@ -121,6 +205,45 @@ function contextText(context: VisitTextContext): string {
     context.visit.humanNotes,
     context.visit.summary,
     ...context.transcripts.map((transcript) => transcript.text),
+  ]
+    .map((value) => compactText(value, 1000))
+    .filter((value): value is string => Boolean(value))
+    .join(" ");
+}
+
+function weeklyContextText(context: WeeklySummaryContext): string {
+  return [
+    ...context.visits.flatMap((visit) => [
+      visit.title,
+      visit.generalStatus,
+      visit.humanNotes,
+      visit.reviewedSummary,
+    ]),
+    ...context.issues.flatMap((issue) => [
+      issue.title,
+      issue.description,
+      issue.costRisk,
+      issue.scheduleRisk,
+    ]),
+    ...context.decisions.flatMap((decision) => [
+      decision.title,
+      decision.description,
+      decision.recommendation,
+      decision.costImpact,
+      decision.scheduleImpact,
+    ]),
+    ...context.contractItems.flatMap((item) => [
+      item.code,
+      item.title,
+      item.description,
+      item.notes,
+    ]),
+    ...context.documents.flatMap((document) => [
+      document.type,
+      document.title,
+      document.notes,
+      document.originalFilename,
+    ]),
   ]
     .map((value) => compactText(value, 1000))
     .filter((value): value is string => Boolean(value))
@@ -154,6 +277,23 @@ export class MockAiProvider implements AiProvider {
       : `Draft summary for "${input.context.visit.title}" on ${input.context.visit.visitDate}.`;
 
     return {
+      summary,
+      provider: this.name,
+      model: this.textModel,
+    };
+  }
+
+  async generateWeeklySummary(
+    input: GenerateWeeklySummaryInput,
+  ): Promise<GenerateWeeklySummaryResult> {
+    const text = compactText(weeklyContextText(input.context), 3000);
+    const title = `Week ${input.context.weekStart} to ${input.context.weekEnd}`;
+    const summary = text
+      ? `Draft weekly summary for "${input.context.project.name}" (${input.context.weekStart} to ${input.context.weekEnd}): ${text}`
+      : `Draft weekly summary for "${input.context.project.name}" (${input.context.weekStart} to ${input.context.weekEnd}). No reviewed text inputs were available.`;
+
+    return {
+      title,
       summary,
       provider: this.name,
       model: this.textModel,
@@ -258,6 +398,16 @@ const summaryJsonSchema = {
   required: ["summary"],
   properties: {
     summary: { type: "string", minLength: 1, maxLength: 2000 },
+  },
+};
+
+const weeklySummaryJsonSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["title", "summary"],
+  properties: {
+    title: { type: "string", minLength: 1, maxLength: 180 },
+    summary: { type: "string", minLength: 1, maxLength: 5000 },
   },
 };
 
@@ -411,7 +561,7 @@ export class OpenAiProvider implements AiProvider {
       "visit_summary",
       summaryJsonSchema,
       "Write a concise renovation visit summary using only the supplied text fields. Do not infer from photos, file contents, or unstated facts.",
-      input.context,
+      trimVisitTextContext(input.context),
     );
 
     return {
@@ -426,7 +576,7 @@ export class OpenAiProvider implements AiProvider {
       "issue_suggestions",
       issuesJsonSchema,
       "Suggest reviewable issue drafts from the supplied renovation visit text only. Use only ids present in the context or null. Do not create contractual conclusions.",
-      input.context,
+      trimVisitTextContext(input.context),
     );
 
     return {
@@ -441,7 +591,7 @@ export class OpenAiProvider implements AiProvider {
       "decision_suggestions",
       decisionsJsonSchema,
       "Suggest reviewable pending decision drafts from the supplied renovation visit text only. Use only ids present in the context or null. Do not approve decisions for the owner.",
-      input.context,
+      trimVisitTextContext(input.context),
     );
 
     return {
@@ -451,11 +601,28 @@ export class OpenAiProvider implements AiProvider {
     };
   }
 
+  async generateWeeklySummary(
+    input: GenerateWeeklySummaryInput,
+  ): Promise<GenerateWeeklySummaryResult> {
+    const json = await this.requestStructuredJson(
+      "weekly_summary",
+      weeklySummaryJsonSchema,
+      "Write a concise renovation weekly summary using only the supplied text fields: visits, reviewed summaries, approved/open issues, pending/approved decisions, zones/trades, budget metadata and document metadata. Do not infer from photos, OCR, document file contents, image analysis, or unstated facts. Make the output a reviewable draft.",
+      trimWeeklySummaryContext(input.context),
+    );
+
+    return {
+      ...(json as WeeklySummaryResult),
+      provider: this.name,
+      model: this.textModel,
+    };
+  }
+
   private async requestStructuredJson(
     name: string,
     schema: Record<string, unknown>,
     instruction: string,
-    context: VisitTextContext,
+    context: unknown,
   ): Promise<unknown> {
     const responseFormat: JsonSchemaResponseFormat = {
       type: "json_schema",
@@ -483,9 +650,7 @@ export class OpenAiProvider implements AiProvider {
           },
           {
             role: "user",
-            content: `${instruction}\n\nContext JSON:\n${JSON.stringify(
-              trimVisitTextContext(context),
-            )}`,
+            content: `${instruction}\n\nContext JSON:\n${JSON.stringify(context)}`,
           },
         ],
       }),
@@ -535,6 +700,44 @@ function trimVisitTextContext(context: VisitTextContext): VisitTextContext {
     transcripts: context.transcripts.slice(0, 10).map((transcript) => ({
       evidenceId: transcript.evidenceId,
       text: compactText(transcript.text, 4000) ?? "",
+    })),
+    zones: context.zones.slice(0, 100),
+    trades: context.trades.slice(0, 100),
+    contractItems: context.contractItems.slice(0, 100).map((item) => ({
+      ...item,
+      description: compactText(item.description, 500),
+      notes: compactText(item.notes, 500),
+    })),
+    documents: context.documents.slice(0, 100).map((document) => ({
+      ...document,
+      notes: compactText(document.notes, 500),
+    })),
+  };
+}
+
+function trimWeeklySummaryContext(context: WeeklySummaryContext): WeeklySummaryContext {
+  return {
+    project: context.project,
+    weekStart: context.weekStart,
+    weekEnd: context.weekEnd,
+    visits: context.visits.slice(0, 50).map((visit) => ({
+      ...visit,
+      generalStatus: compactText(visit.generalStatus, 1000),
+      humanNotes: compactText(visit.humanNotes, 2000),
+      reviewedSummary: compactText(visit.reviewedSummary, 2000),
+    })),
+    issues: context.issues.slice(0, 50).map((issue) => ({
+      ...issue,
+      description: compactText(issue.description, 1000),
+      costRisk: compactText(issue.costRisk, 500),
+      scheduleRisk: compactText(issue.scheduleRisk, 500),
+    })),
+    decisions: context.decisions.slice(0, 50).map((decision) => ({
+      ...decision,
+      description: compactText(decision.description, 1000),
+      recommendation: compactText(decision.recommendation, 1000),
+      costImpact: compactText(decision.costImpact, 500),
+      scheduleImpact: compactText(decision.scheduleImpact, 500),
     })),
     zones: context.zones.slice(0, 100),
     trades: context.trades.slice(0, 100),

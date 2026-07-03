@@ -1,4 +1,4 @@
-import type { AiProvider, VisitTextContext } from "@reforma/ai";
+import type { AiProvider, VisitTextContext, WeeklySummaryContext } from "@reforma/ai";
 import {
   suggestDecisionsJobOutputSchema,
   suggestDecisionsResultSchema,
@@ -9,6 +9,10 @@ import {
   transcribeAudioJobInputSchema,
   transcribeAudioJobOutputSchema,
   type VisitTextExtractionJobInput,
+  type WeeklySummaryJobInput,
+  weeklySummaryJobInputSchema,
+  weeklySummaryJobOutputSchema,
+  weeklySummaryResultSchema,
   visitSummaryJobOutputSchema,
   visitSummaryResultSchema,
   visitTextExtractionJobInputSchema,
@@ -23,12 +27,19 @@ export const SUPPORTED_JOB_TYPES = [
   "generate_visit_summary",
   "suggest_issues",
   "suggest_decisions",
+  "generate_weekly_summary",
 ] as const;
+
+const OPEN_ISSUE_STATUSES = new Set(["open", "in_review", "waiting_builder", "waiting_owner"]);
+const REVIEWED_SUMMARY_STATES = new Set(["approved", "edited", "human_created"]);
+const REVIEWED_AI_STATES = new Set(["approved", "edited", "human_created"]);
+const WEEKLY_DECISION_STATUSES = new Set(["pending", "approved"]);
 
 type WorkerSupabaseClient = SupabaseClient<Database>;
 type AgentJob = Tables<"agent_jobs">;
 type IssueInsert = Database["public"]["Tables"]["issues"]["Insert"];
 type DecisionInsert = Database["public"]["Tables"]["decisions"]["Insert"];
+type WeeklySummaryInsert = Database["public"]["Tables"]["weekly_summaries"]["Insert"];
 type EvidenceRow = Pick<
   Tables<"evidence">,
   "id" | "project_id" | "type" | "storage_path" | "original_filename" | "mime_type"
@@ -44,6 +55,19 @@ type TextTranscriptionRow = Pick<
 type VisitRow = Pick<
   Tables<"visits">,
   "id" | "project_id" | "title" | "visit_date" | "general_status" | "human_notes" | "summary"
+>;
+type WeeklyVisitRow = Pick<
+  Tables<"visits">,
+  | "id"
+  | "project_id"
+  | "title"
+  | "visit_date"
+  | "status"
+  | "general_status"
+  | "human_notes"
+  | "summary"
+  | "summary_source"
+  | "summary_review_state"
 >;
 type ProjectRow = Pick<Tables<"projects">, "id" | "name" | "address_label">;
 type ZoneRow = Pick<Tables<"zones">, "id" | "name" | "description">;
@@ -64,6 +88,37 @@ type DocumentRow = Pick<
   Tables<"documents">,
   "id" | "type" | "title" | "notes" | "original_filename"
 >;
+type JoinedName = { name: string } | null;
+type WeeklyIssueRow = Pick<
+  Tables<"issues">,
+  | "id"
+  | "title"
+  | "description"
+  | "priority"
+  | "status"
+  | "review_state"
+  | "cost_risk"
+  | "schedule_risk"
+> & {
+  zones?: JoinedName;
+  trades?: JoinedName;
+};
+type WeeklyDecisionRow = Pick<
+  Tables<"decisions">,
+  | "id"
+  | "title"
+  | "description"
+  | "priority"
+  | "status"
+  | "deadline"
+  | "review_state"
+  | "recommendation"
+  | "cost_impact"
+  | "schedule_impact"
+> & {
+  zones?: JoinedName;
+  trades?: JoinedName;
+};
 
 export class PermanentJobError extends Error {
   constructor(message: string) {
@@ -143,6 +198,8 @@ async function processSupportedJob(
       return processSuggestIssuesJob(supabase, provider, job);
     case "suggest_decisions":
       return processSuggestDecisionsJob(supabase, provider, job);
+    case "generate_weekly_summary":
+      return processGenerateWeeklySummaryJob(supabase, provider, job);
     default:
       throw new PermanentJobError(`Unsupported job type: ${job.type}.`);
   }
@@ -333,6 +390,44 @@ async function processSuggestDecisionsJob(
   return suggestDecisionsJobOutputSchema.parse({
     visitId: input.visitId,
     decisionIds,
+    provider: result.provider,
+    model: result.model,
+  }) as Json;
+}
+
+async function processGenerateWeeklySummaryJob(
+  supabase: WorkerSupabaseClient,
+  provider: AiProvider,
+  job: AgentJob,
+): Promise<Json> {
+  const { context, input } = await loadWeeklySummaryContext(supabase, job);
+  const result = await provider.generateWeeklySummary({ context });
+  const parsed = weeklySummaryResultSchema.safeParse(result);
+
+  if (!parsed.success) {
+    throw new PermanentJobError(
+      parsed.error.issues[0]?.message ?? "Invalid weekly summary AI output.",
+    );
+  }
+
+  await deleteExistingJobWeeklySummary(supabase, job);
+  const weeklySummaryId = await insertWeeklySummaryDraft(supabase, {
+    project_id: job.project_id,
+    week_start: input.weekStart,
+    week_end: input.weekEnd,
+    title: parsed.data.title,
+    summary: parsed.data.summary,
+    review_state: "ai_draft",
+    source: "ai",
+    created_by: job.created_by,
+    created_by_job_id: job.id,
+  });
+
+  return weeklySummaryJobOutputSchema.parse({
+    weeklySummaryId,
+    projectId: job.project_id,
+    weekStart: input.weekStart,
+    weekEnd: input.weekEnd,
     provider: result.provider,
     model: result.model,
   }) as Json;
@@ -581,6 +676,190 @@ async function loadVisitTranscripts(
     .filter((transcription) => transcription.text.length > 0);
 }
 
+async function loadWeeklySummaryContext(
+  supabase: WorkerSupabaseClient,
+  job: AgentJob,
+): Promise<{ input: WeeklySummaryJobInput; context: WeeklySummaryContext }> {
+  const parsed = weeklySummaryJobInputSchema.safeParse(job.input);
+  if (!parsed.success) {
+    throw new PermanentJobError(
+      parsed.error.issues[0]?.message ?? "Invalid weekly summary job input.",
+    );
+  }
+
+  const input = parsed.data;
+  const [
+    projectResult,
+    visitsResult,
+    zonesResult,
+    tradesResult,
+    contractItemsResult,
+    documentsResult,
+    issuesResult,
+    decisionsResult,
+  ] = await Promise.all([
+    supabase
+      .from("projects")
+      .select("id, name, address_label")
+      .eq("id", job.project_id)
+      .maybeSingle(),
+    supabase
+      .from("visits")
+      .select(
+        "id, project_id, title, visit_date, status, general_status, human_notes, summary, summary_source, summary_review_state",
+      )
+      .eq("project_id", job.project_id)
+      .gte("visit_date", input.weekStart)
+      .lte("visit_date", input.weekEnd)
+      .order("visit_date")
+      .limit(50),
+    supabase
+      .from("zones")
+      .select("id, name, description")
+      .eq("project_id", job.project_id)
+      .order("sort_order"),
+    supabase
+      .from("trades")
+      .select("id, name, description")
+      .eq("project_id", job.project_id)
+      .order("sort_order"),
+    supabase
+      .from("contract_items")
+      .select("id, code, title, description, trade_id, zone_id, total_amount, status, notes")
+      .eq("project_id", job.project_id)
+      .order("created_at")
+      .limit(100),
+    supabase
+      .from("documents")
+      .select("id, type, title, notes, original_filename")
+      .eq("project_id", job.project_id)
+      .order("created_at")
+      .limit(100),
+    supabase
+      .from("issues")
+      .select(
+        "id, title, description, priority, status, review_state, cost_risk, schedule_risk, zones(name), trades(name)",
+      )
+      .eq("project_id", job.project_id)
+      .order("updated_at", { ascending: false })
+      .limit(100),
+    supabase
+      .from("decisions")
+      .select(
+        "id, title, description, priority, status, deadline, review_state, recommendation, cost_impact, schedule_impact, zones(name), trades(name)",
+      )
+      .eq("project_id", job.project_id)
+      .order("updated_at", { ascending: false })
+      .limit(100),
+  ]);
+
+  if (projectResult.error) throw projectResult.error;
+  if (visitsResult.error) throw visitsResult.error;
+  if (zonesResult.error) throw zonesResult.error;
+  if (tradesResult.error) throw tradesResult.error;
+  if (contractItemsResult.error) throw contractItemsResult.error;
+  if (documentsResult.error) throw documentsResult.error;
+  if (issuesResult.error) throw issuesResult.error;
+  if (decisionsResult.error) throw decisionsResult.error;
+  if (!projectResult.data) {
+    throw new PermanentJobError("Project not found for weekly summary job.");
+  }
+
+  const project = projectResult.data as ProjectRow;
+  const visits = (visitsResult.data ?? []) as WeeklyVisitRow[];
+  const zones = (zonesResult.data ?? []) as ZoneRow[];
+  const trades = (tradesResult.data ?? []) as TradeRow[];
+  const contractItems = (contractItemsResult.data ?? []) as ContractItemRow[];
+  const documents = (documentsResult.data ?? []) as DocumentRow[];
+  const issues = ((issuesResult.data ?? []) as WeeklyIssueRow[]).filter(
+    (issue) => OPEN_ISSUE_STATUSES.has(issue.status) && REVIEWED_AI_STATES.has(issue.review_state),
+  );
+  const decisions = ((decisionsResult.data ?? []) as WeeklyDecisionRow[]).filter(
+    (decision) =>
+      WEEKLY_DECISION_STATUSES.has(decision.status) &&
+      REVIEWED_AI_STATES.has(decision.review_state),
+  );
+
+  return {
+    input,
+    context: {
+      project: {
+        id: project.id,
+        name: project.name,
+        addressLabel: project.address_label,
+      },
+      weekStart: input.weekStart,
+      weekEnd: input.weekEnd,
+      visits: visits.map((visit) => ({
+        id: visit.id,
+        title: visit.title,
+        visitDate: visit.visit_date,
+        status: visit.status,
+        generalStatus: visit.general_status,
+        humanNotes: visit.human_notes,
+        reviewedSummary:
+          visit.summary && REVIEWED_SUMMARY_STATES.has(visit.summary_review_state)
+            ? visit.summary
+            : null,
+      })),
+      issues: issues.map((issue) => ({
+        id: issue.id,
+        title: issue.title,
+        description: issue.description,
+        priority: issue.priority,
+        status: issue.status,
+        reviewState: issue.review_state,
+        zoneName: issue.zones?.name ?? null,
+        tradeName: issue.trades?.name ?? null,
+        costRisk: issue.cost_risk,
+        scheduleRisk: issue.schedule_risk,
+      })),
+      decisions: decisions.map((decision) => ({
+        id: decision.id,
+        title: decision.title,
+        description: decision.description,
+        priority: decision.priority,
+        status: decision.status,
+        deadline: decision.deadline,
+        reviewState: decision.review_state,
+        zoneName: decision.zones?.name ?? null,
+        tradeName: decision.trades?.name ?? null,
+        recommendation: decision.recommendation,
+        costImpact: decision.cost_impact,
+        scheduleImpact: decision.schedule_impact,
+      })),
+      zones: zones.map((zone) => ({
+        id: zone.id,
+        name: zone.name,
+        description: zone.description,
+      })),
+      trades: trades.map((trade) => ({
+        id: trade.id,
+        name: trade.name,
+        description: trade.description,
+      })),
+      contractItems: contractItems.map((item) => ({
+        id: item.id,
+        code: item.code,
+        title: item.title,
+        description: item.description,
+        tradeId: item.trade_id,
+        zoneId: item.zone_id,
+        totalAmount: item.total_amount,
+        status: item.status,
+        notes: item.notes,
+      })),
+      documents: documents.map((document) => ({
+        id: document.id,
+        type: document.type,
+        title: document.title,
+        notes: document.notes,
+        originalFilename: document.original_filename,
+      })),
+    },
+  };
+}
+
 function assertIssueReferences(context: VisitTextContext, issue: SuggestedIssue): void {
   const zoneIds = new Set(context.zones.map((zone) => zone.id));
   const tradeIds = new Set(context.trades.map((trade) => trade.id));
@@ -635,6 +914,21 @@ async function deleteExistingJobDecisions(
   }
 }
 
+async function deleteExistingJobWeeklySummary(
+  supabase: WorkerSupabaseClient,
+  job: AgentJob,
+): Promise<void> {
+  const { error } = await supabase
+    .from("weekly_summaries")
+    .delete()
+    .eq("project_id", job.project_id)
+    .eq("created_by_job_id", job.id);
+
+  if (error) {
+    throw error;
+  }
+}
+
 async function insertIssueDrafts(
   supabase: WorkerSupabaseClient,
   rows: IssueInsert[],
@@ -659,6 +953,19 @@ async function insertDecisionDrafts(
   }
 
   return (data ?? []).map((decision) => decision.id);
+}
+
+async function insertWeeklySummaryDraft(
+  supabase: WorkerSupabaseClient,
+  row: WeeklySummaryInsert,
+): Promise<string> {
+  const { data, error } = await supabase.from("weekly_summaries").insert(row).select("id").single();
+
+  if (error) {
+    throw error;
+  }
+
+  return data.id;
 }
 
 async function completeJob(

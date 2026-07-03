@@ -1,7 +1,13 @@
 import Link from "next/link";
 
 import { loadProjectAccess } from "../../../lib/project-access";
-import { DecisionReviewForm, IssueReviewForm, SummaryReviewForm } from "./review-ui";
+import { enqueueWeeklySummary } from "./review-actions";
+import {
+  DecisionReviewForm,
+  IssueReviewForm,
+  SummaryReviewForm,
+  WeeklySummaryReviewForm,
+} from "./review-ui";
 
 interface ProjectPageProps {
   params: Promise<{ projectId: string }>;
@@ -11,10 +17,23 @@ interface ProjectPageProps {
 const OPEN_ISSUE_STATUSES = ["open", "in_review", "waiting_builder", "waiting_owner"] as const;
 const REVIEW_STATES = ["ai_draft", "edited"] as const;
 
+function toIsoDate(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+function defaultWeeklySummaryRange(): { weekStart: string; weekEnd: string } {
+  const today = new Date();
+  const end = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
+  const start = new Date(end);
+  start.setUTCDate(end.getUTCDate() - 6);
+  return { weekStart: toIsoDate(start), weekEnd: toIsoDate(end) };
+}
+
 export default async function ProjectPage({ params, searchParams }: ProjectPageProps) {
   const { projectId } = await params;
   const { error, ok } = await searchParams;
   const { supabase, user, project, role, canEdit, canManage } = await loadProjectAccess(projectId);
+  const defaultRange = defaultWeeklySummaryRange();
 
   const [
     { data: members },
@@ -28,8 +47,11 @@ export default async function ProjectPage({ params, searchParams }: ProjectPageP
     { data: openIssues },
     { data: pendingDecisions },
     { data: summaryDrafts },
+    { data: weeklySummaryDrafts },
     { data: issueDrafts },
     { data: decisionDrafts },
+    { data: weeklySummaries },
+    { data: weeklySummaryJobs },
     { data: auditEntries },
     { data: zones },
     { data: trades },
@@ -94,6 +116,14 @@ export default async function ProjectPage({ params, searchParams }: ProjectPageP
       .order("updated_at", { ascending: false })
       .limit(5),
     supabase
+      .from("weekly_summaries")
+      .select("id, week_start, week_end, title, summary, review_state")
+      .eq("project_id", project.id)
+      .eq("source", "ai")
+      .in("review_state", [...REVIEW_STATES])
+      .order("updated_at", { ascending: false })
+      .limit(5),
+    supabase
       .from("issues")
       .select(
         "id, visit_id, title, description, priority, status, review_state, zone_id, trade_id, contract_item_id, cost_risk, schedule_risk, zones(name), trades(name)",
@@ -112,6 +142,19 @@ export default async function ProjectPage({ params, searchParams }: ProjectPageP
       .eq("source", "ai")
       .in("review_state", [...REVIEW_STATES])
       .order("updated_at", { ascending: false })
+      .limit(5),
+    supabase
+      .from("weekly_summaries")
+      .select("id, week_start, week_end, title, summary, review_state, reviewed_at, updated_at")
+      .eq("project_id", project.id)
+      .order("week_start", { ascending: false })
+      .limit(6),
+    supabase
+      .from("agent_jobs")
+      .select("id, status, input, error_message, created_at, completed_at")
+      .eq("project_id", project.id)
+      .eq("type", "generate_weekly_summary")
+      .order("created_at", { ascending: false })
       .limit(5),
     supabase
       .from("audit_log")
@@ -135,14 +178,20 @@ export default async function ProjectPage({ params, searchParams }: ProjectPageP
   const safeOpenIssues = openIssues ?? [];
   const safePendingDecisions = pendingDecisions ?? [];
   const safeSummaryDrafts = summaryDrafts ?? [];
+  const safeWeeklySummaryDrafts = weeklySummaryDrafts ?? [];
   const safeIssueDrafts = issueDrafts ?? [];
   const safeDecisionDrafts = decisionDrafts ?? [];
+  const safeWeeklySummaries = weeklySummaries ?? [];
+  const safeWeeklySummaryJobs = weeklySummaryJobs ?? [];
   const safeAuditEntries = auditEntries ?? [];
   const safeZones = zones ?? [];
   const safeTrades = trades ?? [];
   const safeContractItems = contractItems ?? [];
   const aiDraftCount =
-    safeSummaryDrafts.length + safeIssueDrafts.length + safeDecisionDrafts.length;
+    safeSummaryDrafts.length +
+    safeWeeklySummaryDrafts.length +
+    safeIssueDrafts.length +
+    safeDecisionDrafts.length;
 
   return (
     <>
@@ -224,6 +273,75 @@ export default async function ProjectPage({ params, searchParams }: ProjectPageP
         )}
       </section>
 
+      <section className="card">
+        <div className="split-row">
+          <div>
+            <h2>Weekly summaries</h2>
+            <p className="muted">Generated asynchronously from reviewed project text.</p>
+          </div>
+        </div>
+        {canEdit ? (
+          <form action={enqueueWeeklySummary} className="inline-edit">
+            <input type="hidden" name="projectId" value={project.id} />
+            <div className="grid two">
+              <label className="field">
+                <span>Week start</span>
+                <input name="weekStart" type="date" defaultValue={defaultRange.weekStart} />
+              </label>
+              <label className="field">
+                <span>Week end</span>
+                <input name="weekEnd" type="date" defaultValue={defaultRange.weekEnd} />
+              </label>
+            </div>
+            <button type="submit">Generate weekly summary</button>
+          </form>
+        ) : null}
+
+        {safeWeeklySummaryJobs.length > 0 ? (
+          <>
+            <h3>Recent jobs</h3>
+            <ul className="stack-list">
+              {safeWeeklySummaryJobs.map((job) => (
+                <li key={job.id} className="stack-item">
+                  <div className="split-row">
+                    <strong>{job.status}</strong>
+                    <span className={`badge status-${job.status}`}>{job.status}</span>
+                  </div>
+                  <p className="muted">
+                    {new Date(job.created_at).toLocaleString()}
+                    {job.error_message ? ` | ${job.error_message}` : ""}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : null}
+
+        {safeWeeklySummaries.length === 0 ? (
+          <p className="muted">No weekly summaries yet.</p>
+        ) : (
+          <>
+            <h3>Recent summaries</h3>
+            <ul className="stack-list">
+              {safeWeeklySummaries.map((weeklySummary) => (
+                <li key={weeklySummary.id} className="stack-item">
+                  <div className="split-row">
+                    <strong>{weeklySummary.title}</strong>
+                    <span className={`badge status-${weeklySummary.review_state}`}>
+                      {weeklySummary.review_state}
+                    </span>
+                  </div>
+                  <p className="muted">
+                    {weeklySummary.week_start} to {weeklySummary.week_end}
+                  </p>
+                  <p>{weeklySummary.summary}</p>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+      </section>
+
       <div className="grid two">
         <section className="card">
           <h2>Open issues</h2>
@@ -284,6 +402,23 @@ export default async function ProjectPage({ params, searchParams }: ProjectPageP
                     visit={visit}
                     canEdit={canEdit}
                     returnTo="project"
+                  />
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : null}
+
+        {safeWeeklySummaryDrafts.length > 0 ? (
+          <>
+            <h3>Weekly summaries</h3>
+            <ul className="stack-list">
+              {safeWeeklySummaryDrafts.map((weeklySummary) => (
+                <li key={weeklySummary.id} className="stack-item">
+                  <WeeklySummaryReviewForm
+                    projectId={project.id}
+                    weeklySummary={weeklySummary}
+                    canEdit={canEdit}
                   />
                 </li>
               ))}

@@ -60,6 +60,57 @@ const visitContext = {
   ],
 };
 
+const weeklyContext = {
+  project: visitContext.project,
+  weekStart: "2026-06-29",
+  weekEnd: "2026-07-05",
+  visits: [
+    {
+      id: visitContext.visit.id,
+      title: visitContext.visit.title,
+      visitDate: visitContext.visit.visitDate,
+      status: "published",
+      generalStatus: visitContext.visit.generalStatus,
+      humanNotes: visitContext.visit.humanNotes,
+      reviewedSummary: "Kitchen cabinets progressed; plumbing needs owner follow-up.",
+    },
+  ],
+  issues: [
+    {
+      id: "88888888-8888-4888-8888-888888888888",
+      title: "Confirm sink connection",
+      description: "Builder needs plumbing confirmation before worktop measurement.",
+      priority: "high",
+      status: "open",
+      reviewState: "approved",
+      zoneName: "Kitchen",
+      tradeName: "Plumbing",
+      costRisk: null,
+      scheduleRisk: "Could delay measurement.",
+    },
+  ],
+  decisions: [
+    {
+      id: "99999999-9999-4999-8999-999999999999",
+      title: "Choose countertop material",
+      description: "Owner needs to choose before ordering cabinets.",
+      priority: "medium",
+      status: "pending",
+      deadline: "2026-07-15",
+      reviewState: "human_created",
+      zoneName: "Kitchen",
+      tradeName: null,
+      recommendation: "Review quartz and laminate options.",
+      costImpact: null,
+      scheduleImpact: "Blocks cabinet ordering.",
+    },
+  ],
+  zones: visitContext.zones,
+  trades: visitContext.trades,
+  contractItems: visitContext.contractItems,
+  documents: visitContext.documents,
+};
+
 describe("MockAiProvider", () => {
   it("returns a deterministic local transcript", async () => {
     const provider = new MockAiProvider();
@@ -86,6 +137,17 @@ describe("MockAiProvider", () => {
     expect(result.model).toBe("mock-text-extractor");
     expect(result.summary).toContain("Kitchen visit");
     expect(result.summary).toContain("Cabinets installed");
+  });
+
+  it("returns a deterministic weekly summary draft", async () => {
+    const provider = new MockAiProvider();
+    const result = await provider.generateWeeklySummary({ context: weeklyContext });
+
+    expect(result.provider).toBe("mock");
+    expect(result.model).toBe("mock-text-extractor");
+    expect(result.title).toBe("Week 2026-06-29 to 2026-07-05");
+    expect(result.summary).toContain("Flat renovation");
+    expect(result.summary).toContain("Confirm sink connection");
   });
 
   it("returns deterministic issue drafts from visit text", async () => {

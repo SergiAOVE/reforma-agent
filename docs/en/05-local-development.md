@@ -99,6 +99,15 @@ Phase 7 adds the project dashboard and human review actions. Open
 audit log. Owner/admin/editor roles can approve, edit, reject and close AI drafts; viewers remain
 read-only through RLS.
 
+Phase 8 adds weekly summary generation on the project dashboard. Owner/admin/editor roles can
+enqueue `generate_weekly_summary` for a date range; the worker creates a reviewable
+`weekly_summaries` draft from text-only project data. Use the mock provider when no OpenAI key is
+configured:
+
+```bash
+WORKER_RUN_ONCE=true pnpm --filter @reforma/worker dev
+```
+
 Example budget CSV:
 
 ```csv

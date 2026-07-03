@@ -64,10 +64,27 @@ export const visitTextExtractionJobInputSchema = z.object({
 });
 export type VisitTextExtractionJobInput = z.infer<typeof visitTextExtractionJobInputSchema>;
 
+export const weeklySummaryJobInputSchema = z
+  .object({
+    weekStart: isoDateSchema,
+    weekEnd: isoDateSchema,
+  })
+  .refine((value) => value.weekStart <= value.weekEnd, {
+    message: "weekStart must be on or before weekEnd",
+    path: ["weekEnd"],
+  });
+export type WeeklySummaryJobInput = z.infer<typeof weeklySummaryJobInputSchema>;
+
 export const visitSummaryResultSchema = z.object({
   summary: z.string().trim().min(1).max(2000),
 });
 export type VisitSummaryResult = z.infer<typeof visitSummaryResultSchema>;
+
+export const weeklySummaryResultSchema = z.object({
+  title: z.string().trim().min(1).max(180),
+  summary: z.string().trim().min(1).max(5000),
+});
+export type WeeklySummaryResult = z.infer<typeof weeklySummaryResultSchema>;
 
 export const suggestedIssueSchema = z.object({
   title: aiDraftTitleSchema,
@@ -133,3 +150,11 @@ export const suggestDecisionsJobOutputSchema = providerOutputSchema.extend({
   decisionIds: z.array(uuidSchema),
 });
 export type SuggestDecisionsJobOutput = z.infer<typeof suggestDecisionsJobOutputSchema>;
+
+export const weeklySummaryJobOutputSchema = providerOutputSchema.extend({
+  weeklySummaryId: uuidSchema,
+  projectId: uuidSchema,
+  weekStart: isoDateSchema,
+  weekEnd: isoDateSchema,
+});
+export type WeeklySummaryJobOutput = z.infer<typeof weeklySummaryJobOutputSchema>;

@@ -13,13 +13,31 @@ A phase is only marked as completed if the checks (lint, typecheck, test, build)
 - [x] **Phase 5 — Worker and transcription**: agent_jobs, polling, locking, retries, audio transcription.
 - [x] **Phase 6 — Textual AI extraction**: summaries, issue drafts and decision drafts (`ai_draft`).
 - [x] **Phase 7 — Dashboard and human review**: dashboard, approve/edit/reject drafts, audit log.
-- [ ] **Phase 8 — Weekly summary**: `generate_weekly_summary` job with a reviewable draft.
+- [x] **Phase 8 — Weekly summary**: `generate_weekly_summary` job with a reviewable draft.
 - [ ] **Phase 9 — Deployment docs.**
 - [ ] **Phase 10 — Optional: Telegram gateway.**
 - [ ] **Phase 11 — Optional: NanoClaw gateway.**
 - [ ] **Phase 12 — Optional: document intelligence.**
 
 ## Completed phases log
+
+### Phase 8 — 2026-07-03
+
+Weekly summary generation implemented. New migration
+`20260703193548_phase8_weekly_summaries.sql` creates `weekly_summaries` with review metadata,
+worker-job provenance, indexes, explicit Data API grants and RLS policies: project members read,
+owner/admin/editor roles review, worker/service role inserts, no client delete. The dashboard can
+enqueue `generate_weekly_summary` jobs for a date range, shows recent weekly jobs and summaries,
+and adds approve/edit/reject review actions with `audit_log` entries. `apps/worker` now processes
+`generate_weekly_summary` through the existing `agent_jobs` polling/locking/retry flow and stores
+validated `ai_draft` rows. The Phase 8 worker context is text-only: visits, reviewed summaries,
+open reviewed issues, pending/approved reviewed decisions, zones/trades, budget metadata and
+document metadata. It does not download files, OCR documents, analyze images, implement Telegram,
+implement NanoClaw or add document intelligence. `packages/core` gained weekly summary job/form
+schemas; `packages/ai` gained mock and OpenAI structured-output weekly summary support; tests were
+added across core, AI and worker. Checks green: `supabase db reset`, generated DB types,
+`supabase db lint --local`, local migration list, worker smoke generation of a weekly summary,
+authenticated RLS read/update smoke, anon sees 0 rows, lint, typecheck, test and build.
 
 ### Phase 7 — 2026-07-03
 

@@ -140,6 +140,27 @@ export const summaryReviewFormSchema = z.object({
 });
 export type SummaryReviewFormInput = z.infer<typeof summaryReviewFormSchema>;
 
+export const weeklySummaryRequestSchema = z
+  .object({
+    weekStart: isoDateSchema,
+    weekEnd: isoDateSchema,
+  })
+  .refine((value) => value.weekStart <= value.weekEnd, {
+    message: "Week start must be on or before week end.",
+    path: ["weekEnd"],
+  });
+export type WeeklySummaryRequestInput = z.infer<typeof weeklySummaryRequestSchema>;
+
+export const weeklySummaryReviewActionSchema = z.enum(["approve", "edit", "reject"]);
+export type WeeklySummaryReviewAction = z.infer<typeof weeklySummaryReviewActionSchema>;
+
+export const weeklySummaryReviewFormSchema = z.object({
+  action: weeklySummaryReviewActionSchema,
+  title: nonEmptyStringSchema.max(180),
+  summary: optionalTrimmedText,
+});
+export type WeeklySummaryReviewFormInput = z.infer<typeof weeklySummaryReviewFormSchema>;
+
 export const issueReviewActionSchema = z.enum(["approve", "edit", "reject", "close"]);
 export type IssueReviewAction = z.infer<typeof issueReviewActionSchema>;
 
