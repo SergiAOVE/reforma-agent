@@ -28,17 +28,24 @@ cp .env.example .env   # fill in values once Supabase exists (Phase 1+)
 The web app runs at `http://localhost:3000`. In Phase 0 the worker only writes a controlled
 startup log and exits (in `dev` mode it stays in watch).
 
-## Supabase (from Phase 1)
+## Supabase
 
-The `supabase/` directory holds migrations, seeds and policies. The Supabase CLI will be used
-for the local stack:
+Requires the [Supabase CLI](https://supabase.com/docs/guides/local-development) and Docker.
 
 ```bash
-supabase start
-supabase db reset
+supabase start      # start the local stack (first run downloads images)
+supabase db reset   # apply all migrations + synthetic seed from scratch
+supabase status     # show local URLs and keys for .env
+supabase stop       # stop the stack
 ```
 
-Exact commands will be documented when the first migrations are created.
+`supabase status` prints the local `API URL`, `anon key` and `service_role key` — copy them into
+`.env` (see `.env.example`). Seeded test users (local only): `ana@example.com` (owner) and
+`luis@example.com` (editor), password `password123`.
+
+Migrations live in `supabase/migrations/` (enums → tables → RLS) and the seed in
+`supabase/seed/seed.sql`. See [02-data-model.md](02-data-model.md) and
+[03-security-privacy.md](03-security-privacy.md).
 
 ## Conventions
 

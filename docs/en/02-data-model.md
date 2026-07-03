@@ -1,8 +1,11 @@
 # Data model
 
-> Status: preliminary design. Real migrations are created in **Phase 1**.
+> Status: **implemented in Phase 1**. Source of truth:
+> [supabase/migrations/](../../supabase/migrations/) — enums, tables and RLS are fully
+> commented there. TypeScript mirrors live in
+> [packages/core/src/enums.ts](../../packages/core/src/enums.ts).
 
-## Planned tables
+## Tables
 
 | Table                  | Purpose                                                     |
 | ---------------------- | ----------------------------------------------------------- |
@@ -19,9 +22,11 @@
 | `issues`               | Issues                                                      |
 | `decisions`            | Pending decisions                                           |
 | `agent_jobs`           | AI worker job queue                                         |
-| `audit_log`            | Log of relevant actions                                     |
+| `audit_log`            | Append-only log of relevant actions                         |
 
-## Planned enums
+## Enums
+
+Defined in `20260702120000_create_enums.sql` and mirrored in `packages/core`:
 
 - `project_role`: owner, admin, editor, viewer
 - `project_status`: active, paused, completed, archived
@@ -34,7 +39,11 @@
 - `job_type`: transcribe_audio, extract_visit, generate_visit_summary, suggest_issues, suggest_decisions, generate_weekly_summary
 - `job_status`: pending, processing, completed, failed, cancelled
 
-## Main relationships
+`review_state` (human_created, ai_draft, approved, edited, rejected) and `source` (human, ai)
+are intentionally **text columns**, not SQL enums: the review workflow is still being built out
+(Phases 6–7) and text keeps them cheap to evolve. They are validated app-side with Zod.
+
+## Relationships
 
 ```mermaid
 erDiagram
@@ -46,20 +55,31 @@ erDiagram
     projects ||--o{ documents : ""
     projects ||--o{ contract_items : ""
     projects ||--o{ agent_jobs : ""
+    projects ||--o{ audit_log : ""
     visits ||--o{ evidence : ""
-    evidence ||--o| audio_transcriptions : "if audio"
+    evidence ||--o{ audio_transcriptions : "if audio"
     visits ||--o{ issues : ""
     visits ||--o{ decisions : ""
     documents ||--o{ contract_items : "source"
+    agent_jobs ||--o{ audio_transcriptions : "created by"
+    agent_jobs ||--o{ issues : "created by"
+    agent_jobs ||--o{ decisions : "created by"
 ```
 
 ## Design notes
 
-- AI-generated content is marked with `source = 'ai'` / `review_state = 'ai_draft'` and a
-  `created_by_job_id` reference to the job that created it. Flow: `ai_draft → edited/approved/rejected`.
-- Personal data minimization: `projects.address_label` is a label ("Barcelona flat"), not the
-  full postal address.
-- Transcriptions always keep the original text (`raw_transcript`) alongside the edited version
-  (`edited_transcript`). AI extractions use the edited version when it exists.
-- The field-by-field detail of each table lives in the bootstrap document and will be
-  consolidated here when the Phase 1 migrations are written.
+- **Every project data table carries `project_id`** with `on delete cascade`: deleting a project
+  removes all its data, and RLS filters by membership on that column.
+- **AI provenance**: AI-created rows carry `source = 'ai'`, `review_state = 'ai_draft'` and
+  `created_by_job_id` pointing to the `agent_jobs` row. Flow: `ai_draft → edited/approved/rejected`.
+- **`updated_at` is automatic** via the `set_updated_at` trigger on every mutable table.
+  `audit_log` has no `updated_at`: it is append-only.
+- **Transcripts are never destroyed**: `raw_transcript` is immutable in practice (no client
+  insert/delete policies); users edit `edited_transcript`. Phase 6 extractions prefer the edited
+  version.
+- **Worker queue**: `agent_jobs` has a partial index on `status = 'pending'` for the polling
+  query, plus `locked_at`/`locked_by`/`attempt_count` fields ready for Phase 5.
+- **Data minimization**: `projects.address_label` is a label ("Barcelona flat"), not a full
+  postal address.
+- Nullable references (`zone_id`, `trade_id`, `visit_id`, …) use `on delete set null` so deleting
+  a zone or trade never destroys visits or evidence.

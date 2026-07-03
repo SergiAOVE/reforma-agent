@@ -6,7 +6,7 @@ A phase is only marked as completed if the checks (lint, typecheck, test, build)
 ## Phases
 
 - [x] **Phase 0 — Bootstrap**: pnpm monorepo, web/worker apps, core/ai/db packages, docs, checks.
-- [ ] **Phase 1 — Data model**: Supabase schema, enums, migrations, base RLS, synthetic seed.
+- [x] **Phase 1 — Data model**: Supabase schema, enums, migrations, base RLS, synthetic seed.
 - [ ] **Phase 2 — Auth and projects**: Supabase Auth, profiles, projects, memberships and roles.
 - [ ] **Phase 3 — Project setup**: zones, trades, documents, contract_items (+ CSV import).
 - [ ] **Phase 4 — Visits and evidence**: visits, photo/audio uploads, private storage, signed URLs.
@@ -20,6 +20,18 @@ A phase is only marked as completed if the checks (lint, typecheck, test, build)
 - [ ] **Phase 12 — Optional: document intelligence.**
 
 ## Completed phases log
+
+### Phase 1 — 2026-07-02
+
+Data model implemented in three migrations: 10 enums, 14 tables (indexes, FK cascade rules,
+`set_updated_at` triggers) and RLS on every table with 49 policies based on `project_members`
+plus three `SECURITY DEFINER` helpers (`is_project_member`, `has_project_role`,
+`can_edit_project`). Synthetic seed with 2 users, 1 project and sample visit/issue/decision.
+TypeScript enum mirrors and Zod validators added to `packages/core` with 41 tests. Validated
+against the local Supabase stack (`supabase db reset` clean; RLS functionally tested: member
+sees data, outsider and anon see nothing, editor can write, outsider write rejected). Local
+stack moved to ports 55321+ to coexist with another Supabase project on the machine. Checks
+green: lint, typecheck, test, build.
 
 ### Phase 0 — 2026-07-02
 
