@@ -8,9 +8,9 @@ The app will let a trusted visitor document site visits, upload photos as eviden
 
 The app is the source of truth. Supabase stores data, permissions, and private files. A separate worker processes AI jobs. AI proposes reviewable drafts; humans approve, edit, or reject them. Photos are evidence only; the MVP does not use AI image analysis.
 
-## Phase 0 Status
+## Current Status
 
-This repository currently contains the Phase 0 foundation only:
+This repository contains the Phase 1 foundation:
 
 - pnpm workspace monorepo
 - Next.js App Router web app in `apps/web`
@@ -18,10 +18,10 @@ This repository currently contains the Phase 0 foundation only:
 - Shared domain package in `packages/core`
 - AI abstraction package in `packages/ai`
 - Future Supabase helper package in `packages/db`
-- Supabase folder placeholders
+- Initial Supabase schema migration with enums, tables, RLS, and synthetic seed data
 - Project docs and ADRs
 
-Business features, Supabase integration, auth, storage, real AI, and database migrations are intentionally deferred to later phases.
+Business features, auth UI, uploads, real AI, and worker processing are intentionally deferred to later phases.
 
 ## Stack
 
@@ -54,6 +54,14 @@ pnpm lint
 pnpm typecheck
 pnpm test
 pnpm build
+```
+
+Phase 1 Supabase files:
+
+```text
+supabase/migrations/20260703093000_initial_schema_rls.sql
+supabase/seed/0001_synthetic_seed.sql
+supabase/policies/storage-phase-1-notes.md
 ```
 
 ## Environment

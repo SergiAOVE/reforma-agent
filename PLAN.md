@@ -2,14 +2,14 @@
 
 ## Current Status
 
-Phase 0 is complete. Install, lint, typecheck, tests, and build passed.
+Phase 1 is complete in source control. Install, lint, typecheck, tests, and build passed. Supabase CLI checks could not run because the CLI is not installed in this environment.
 
 ## Phase Plan
 
 | Phase | Scope | Status |
 | --- | --- | --- |
 | 0 | Bootstrap repo, docs, monorepo, checks | Complete |
-| 1 | Supabase schema, enums, RLS, seed | Not started |
+| 1 | Supabase schema, enums, RLS, seed | Complete |
 | 2 | Auth, profiles, projects, memberships | Not started |
 | 3 | Zones, trades, documents, contract items | Not started |
 | 4 | Visits and evidence | Not started |
@@ -43,4 +43,25 @@ Phase 0 is complete. Install, lint, typecheck, tests, and build passed.
 
 ## Implementation Boundaries
 
-Phase 0 does not include Supabase integration, database tables, auth, file uploads, real AI, transcription, or business workflows.
+Phase 1 includes database schema, RLS, seed data, shared domain schemas, and docs only. It does not include auth UI, file uploads, real worker processing, real AI, Telegram, image analysis, or business workflow screens.
+
+## Phase 1 Acceptance Checklist
+
+- [x] Initial Supabase enum types defined.
+- [x] Initial Supabase tables created in a migration.
+- [x] RLS enabled on project data tables.
+- [x] RLS policies based on `project_members`.
+- [x] Explicit Data API grants prepared for authenticated access.
+- [x] Synthetic seed data added.
+- [x] Storage policy direction documented.
+- [x] Matching TypeScript enums and Zod schemas added in `packages/core`.
+- [x] Core tests added for enums and validators.
+- [x] Data model and security docs updated.
+- [x] `pnpm lint` passed.
+- [x] `pnpm typecheck` passed.
+- [x] `pnpm test` passed.
+- [x] `pnpm build` passed.
+- [ ] `supabase db reset` run locally.
+- [ ] `supabase db advisors` run locally.
+
+The unchecked Supabase CLI items require installing and configuring the Supabase CLI.

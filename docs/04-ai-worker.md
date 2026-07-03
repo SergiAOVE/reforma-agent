@@ -11,6 +11,6 @@ The worker is a separate Node.js TypeScript process. It will eventually process 
 - AI must not assert definitive contractual breach.
 - Long-running AI jobs must not run inside normal Next.js web requests.
 
-## Phase 0 Status
+## Current Status
 
-The worker only starts and writes one controlled log. It does not connect to Supabase or call any AI provider.
+The worker only starts and writes one controlled log. Phase 1 adds the future `agent_jobs` table, but does not implement worker processing, Supabase integration, transcription, or AI provider calls.

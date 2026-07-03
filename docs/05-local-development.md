@@ -29,6 +29,27 @@ pnpm test
 pnpm build
 ```
 
-## Phase 0 Notes
+## Repository Notes
 
-Supabase CLI is not required yet because Phase 0 does not create migrations or local Supabase services.
+The web and worker checks do not require a running Supabase project yet.
+
+## Supabase Phase 1
+
+Phase 1 adds SQL files but does not require auth UI or app integration yet.
+
+Expected Supabase validation commands once the CLI is installed:
+
+```bash
+supabase --version
+supabase db reset
+supabase db advisors
+```
+
+If using a direct Postgres connection instead, apply:
+
+```bash
+psql "$DATABASE_URL" -f supabase/migrations/20260703093000_initial_schema_rls.sql
+psql "$DATABASE_URL" -f supabase/seed/0001_synthetic_seed.sql
+```
+
+The seed file is synthetic and must not be replaced with real renovation data.
