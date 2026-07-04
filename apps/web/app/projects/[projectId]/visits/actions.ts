@@ -5,10 +5,13 @@ import { redirect } from "next/navigation";
 
 import {
   audioTranscriptionEditSchema,
+  type EvidenceMetadataInput,
   evidenceMetadataSchema,
   evidenceMimeTypeMatchesType,
+  evidenceTypeFromMimeType,
   transcribeAudioJobInputSchema,
   uuidSchema,
+  type VisitFormInput,
   visitFormSchema,
   visitTextExtractionJobInputSchema,
   visitTextExtractionJobTypeSchema,
@@ -90,15 +93,31 @@ function readEvidenceFile(formData: FormData, projectId: string, visitId: string
   if (!(value instanceof File) || value.size === 0) {
     visitRedirect(projectId, visitId, { error: "Choose an evidence file to upload." });
   }
+  validateEvidenceFile(value, projectId, visitId);
+  return value;
+}
+
+function readEvidenceFiles(formData: FormData): File[] {
+  return formData
+    .getAll("files")
+    .filter((value): value is File => value instanceof File && value.size > 0);
+}
+
+function validateEvidenceFile(value: File, projectId: string, visitId: string): void {
+  const error = evidenceFileValidationError(value);
+  if (error) {
+    visitRedirect(projectId, visitId, { error });
+  }
+}
+
+function evidenceFileValidationError(value: File): string | null {
   if (value.size > MAX_EVIDENCE_UPLOAD_BYTES) {
-    visitRedirect(projectId, visitId, { error: "Evidence files must be 50 MB or smaller." });
+    return "Evidence files must be 50 MB or smaller.";
   }
   if (!ALLOWED_EVIDENCE_MIME_TYPES.has(value.type)) {
-    visitRedirect(projectId, visitId, {
-      error: `Unsupported file type: ${value.type || "unknown"}.`,
-    });
+    return `Unsupported file type: ${value.type || "unknown"}.`;
   }
-  return value;
+  return null;
 }
 
 async function assertVisitBelongsToProject(projectId: string, visitId: string): Promise<boolean> {
@@ -111,6 +130,229 @@ async function assertVisitBelongsToProject(projectId: string, visitId: string): 
     .maybeSingle();
 
   return Boolean(data);
+}
+
+export interface VisitAutosaveInput {
+  projectId: string;
+  visitId: string;
+  title: string;
+  visitDate: string;
+  generalStatus: string;
+  humanNotes: string;
+  summary: string;
+  primaryZoneId: string;
+  primaryTradeId: string;
+}
+
+export type SaveActionResult =
+  | { ok: true; savedAt: string; message: string }
+  | { ok: false; error: string; savedAt?: string; message?: string };
+
+export type UploadEvidenceBatchResult =
+  | { ok: true; savedAt: string; uploadedCount: number; message: string }
+  | { ok: false; error: string; uploadedCount: number; savedAt?: string; message?: string };
+
+function firstValidationMessage(parsed: {
+  success: false;
+  error: { issues: { message: string }[] };
+}) {
+  return parsed.error.issues[0]?.message ?? "Invalid input.";
+}
+
+async function persistVisitUpdate(
+  projectId: string,
+  visitId: string,
+  values: VisitFormInput,
+): Promise<SaveActionResult> {
+  const { supabase, user } = await requireUser();
+
+  const { data: existingVisit, error: existingVisitError } = await supabase
+    .from("visits")
+    .select("summary, summary_source, summary_review_state, summary_created_by_job_id")
+    .eq("id", visitId)
+    .eq("project_id", projectId)
+    .maybeSingle();
+
+  if (existingVisitError) {
+    return { ok: false, error: existingVisitError.message };
+  }
+  if (!existingVisit) {
+    return { ok: false, error: "Visit not found." };
+  }
+
+  const summaryChanged = values.summary !== existingVisit.summary;
+  let summaryReviewChanges: Record<string, string | null> = {};
+  let newSummaryReviewState: string | null = null;
+
+  if (summaryChanged && existingVisit.summary_source === "ai") {
+    newSummaryReviewState = values.summary ? "edited" : "rejected";
+    summaryReviewChanges = {
+      summary_source: "ai",
+      summary_review_state: newSummaryReviewState,
+      summary_created_by_job_id: values.summary ? existingVisit.summary_created_by_job_id : null,
+      summary_reviewed_by: user.id,
+      summary_reviewed_at: new Date().toISOString(),
+    };
+  } else if (summaryChanged) {
+    summaryReviewChanges = {
+      summary_source: "human",
+      summary_review_state: "human_created",
+      summary_created_by_job_id: null,
+      summary_reviewed_by: null,
+      summary_reviewed_at: null,
+    };
+  }
+
+  const { data, error } = await supabase
+    .from("visits")
+    .update({
+      title: values.title,
+      visit_date: values.visitDate,
+      general_status: values.generalStatus,
+      summary: values.summary,
+      human_notes: values.humanNotes,
+      primary_zone_id: values.primaryZoneId,
+      primary_trade_id: values.primaryTradeId,
+      ...summaryReviewChanges,
+    })
+    .eq("id", visitId)
+    .eq("project_id", projectId)
+    .select("id, updated_at");
+
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+  if (!data || data.length === 0) {
+    return { ok: false, error: "You do not have permission to update this visit." };
+  }
+
+  if (summaryChanged && existingVisit.summary_source === "ai") {
+    const { error: auditError } = await supabase.from("audit_log").insert({
+      project_id: projectId,
+      actor_user_id: user.id,
+      action: values.summary ? "summary.edited" : "summary.rejected",
+      entity_type: "visit",
+      entity_id: visitId,
+      metadata: {
+        previousReviewState: existingVisit.summary_review_state,
+        newReviewState: newSummaryReviewState,
+      },
+    });
+
+    if (auditError) {
+      return { ok: false, error: auditError.message };
+    }
+  }
+
+  revalidatePath(`/projects/${projectId}/visits`);
+  revalidatePath(`/projects/${projectId}`);
+
+  return {
+    ok: true,
+    savedAt: data[0]?.updated_at ?? new Date().toISOString(),
+    message: "Visit saved.",
+  };
+}
+
+async function persistEvidenceUpload({
+  projectId,
+  visitId,
+  file,
+  metadata,
+  uploadedBy,
+}: {
+  projectId: string;
+  visitId: string;
+  file: File;
+  metadata: EvidenceMetadataInput;
+  uploadedBy: string;
+}): Promise<SaveActionResult> {
+  const { supabase } = await requireUser();
+
+  if (!evidenceMimeTypeMatchesType(file.type, metadata.type)) {
+    return {
+      ok: false,
+      error: `The uploaded file type (${file.type}) does not match ${metadata.type}.`,
+    };
+  }
+
+  const storagePath = createEvidenceStoragePath(projectId, visitId, file.name);
+  const { error: uploadError } = await supabase.storage
+    .from(VISIT_EVIDENCE_BUCKET)
+    .upload(storagePath, file, { contentType: file.type, upsert: false });
+
+  if (uploadError) {
+    return { ok: false, error: uploadError.message };
+  }
+
+  const { data, error } = await supabase
+    .from("evidence")
+    .insert({
+      project_id: projectId,
+      visit_id: visitId,
+      type: metadata.type,
+      storage_path: storagePath,
+      original_filename: file.name,
+      mime_type: file.type,
+      size_bytes: file.size,
+      zone_id: metadata.zoneId,
+      trade_id: metadata.tradeId,
+      manual_note: metadata.manualNote,
+      uploaded_by: uploadedBy,
+    })
+    .select("id, updated_at");
+
+  if (error) {
+    await supabase.storage.from(VISIT_EVIDENCE_BUCKET).remove([storagePath]);
+    return { ok: false, error: error.message };
+  }
+  if (!data || data.length === 0) {
+    await supabase.storage.from(VISIT_EVIDENCE_BUCKET).remove([storagePath]);
+    return { ok: false, error: "You do not have permission to upload evidence." };
+  }
+
+  return {
+    ok: true,
+    savedAt: data[0]?.updated_at ?? new Date().toISOString(),
+    message: "Evidence uploaded.",
+  };
+}
+
+async function persistEvidenceMetadataUpdate(
+  projectId: string,
+  visitId: string,
+  evidenceId: string,
+  values: EvidenceMetadataInput,
+): Promise<SaveActionResult> {
+  const { supabase } = await requireUser();
+
+  const { data, error } = await supabase
+    .from("evidence")
+    .update({
+      type: values.type,
+      zone_id: values.zoneId,
+      trade_id: values.tradeId,
+      manual_note: values.manualNote,
+    })
+    .eq("id", evidenceId)
+    .eq("project_id", projectId)
+    .eq("visit_id", visitId)
+    .select("id, updated_at");
+
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+  if (!data || data.length === 0) {
+    return { ok: false, error: "You do not have permission to update this evidence." };
+  }
+
+  revalidatePath(`/projects/${projectId}/visits`);
+
+  return {
+    ok: true,
+    savedAt: data[0]?.updated_at ?? new Date().toISOString(),
+    message: "Evidence saved.",
+  };
 }
 
 export async function createVisit(formData: FormData): Promise<void> {
@@ -151,97 +393,47 @@ export async function createVisit(formData: FormData): Promise<void> {
 export async function updateVisit(formData: FormData): Promise<void> {
   const projectId = requireProjectId(formData);
   const visitId = requireVisitId(formData, projectId);
-  const { supabase, user } = await requireUser();
   const parsed = readVisitForm(formData);
 
   if (!parsed.success) {
     visitRedirect(projectId, visitId, {
-      error: parsed.error.issues[0]?.message ?? "Invalid input.",
+      error: firstValidationMessage(parsed),
     });
   }
 
-  const { data: existingVisit, error: existingVisitError } = await supabase
-    .from("visits")
-    .select("summary, summary_source, summary_review_state, summary_created_by_job_id")
-    .eq("id", visitId)
-    .eq("project_id", projectId)
-    .maybeSingle();
-
-  if (existingVisitError) {
-    visitRedirect(projectId, visitId, { error: existingVisitError.message });
-  }
-  if (!existingVisit) {
-    visitRedirect(projectId, visitId, { error: "Visit not found." });
+  const result = await persistVisitUpdate(projectId, visitId, parsed.data);
+  if (!result.ok) {
+    visitRedirect(projectId, visitId, { error: result.error });
   }
 
-  const summaryChanged = parsed.data.summary !== existingVisit.summary;
-  const summaryReviewChanges =
-    summaryChanged && existingVisit.summary_source === "ai"
-      ? {
-          summary_source: "ai",
-          summary_review_state: parsed.data.summary ? "edited" : "rejected",
-          summary_created_by_job_id: parsed.data.summary
-            ? existingVisit.summary_created_by_job_id
-            : null,
-          summary_reviewed_by: user.id,
-          summary_reviewed_at: new Date().toISOString(),
-        }
-      : summaryChanged
-        ? {
-            summary_source: "human",
-            summary_review_state: "human_created",
-            summary_created_by_job_id: null,
-            summary_reviewed_by: null,
-            summary_reviewed_at: null,
-          }
-        : {};
+  visitRedirect(projectId, visitId, { ok: result.message });
+}
 
-  const { data, error } = await supabase
-    .from("visits")
-    .update({
-      title: parsed.data.title,
-      visit_date: parsed.data.visitDate,
-      general_status: parsed.data.generalStatus,
-      summary: parsed.data.summary,
-      human_notes: parsed.data.humanNotes,
-      primary_zone_id: parsed.data.primaryZoneId,
-      primary_trade_id: parsed.data.primaryTradeId,
-      ...summaryReviewChanges,
-    })
-    .eq("id", visitId)
-    .eq("project_id", projectId)
-    .select("id");
-
-  if (error) {
-    visitRedirect(projectId, visitId, { error: error.message });
+export async function autosaveVisit(input: VisitAutosaveInput): Promise<SaveActionResult> {
+  const projectId = uuidSchema.safeParse(input.projectId);
+  if (!projectId.success) {
+    return { ok: false, error: "Invalid project." };
   }
-  if (!data || data.length === 0) {
-    visitRedirect(projectId, visitId, {
-      error: "You do not have permission to update this visit.",
-    });
+  const visitId = uuidSchema.safeParse(input.visitId);
+  if (!visitId.success) {
+    return { ok: false, error: "Invalid visit." };
   }
 
-  if (summaryChanged && existingVisit.summary_source === "ai") {
-    const { error: auditError } = await supabase.from("audit_log").insert({
-      project_id: projectId,
-      actor_user_id: user.id,
-      action: parsed.data.summary ? "summary.edited" : "summary.rejected",
-      entity_type: "visit",
-      entity_id: visitId,
-      metadata: {
-        previousReviewState: existingVisit.summary_review_state,
-        newReviewState: summaryReviewChanges.summary_review_state,
-      },
-    });
+  const parsed = visitFormSchema.safeParse({
+    title: input.title,
+    visitDate: input.visitDate,
+    generalStatus: input.generalStatus,
+    summary: input.summary,
+    humanNotes: input.humanNotes,
+    primaryZoneId: input.primaryZoneId,
+    primaryTradeId: input.primaryTradeId,
+  });
 
-    if (auditError) {
-      visitRedirect(projectId, visitId, { error: auditError.message });
-    }
+  if (!parsed.success) {
+    return { ok: false, error: firstValidationMessage(parsed) };
   }
 
-  revalidatePath(`/projects/${projectId}/visits`);
-  revalidatePath(`/projects/${projectId}`);
-  visitRedirect(projectId, visitId, { ok: "Visit updated." });
+  return persistVisitUpdate(projectId.data, visitId.data, parsed.data);
 }
 
 export async function setVisitStatus(formData: FormData): Promise<void> {
@@ -354,7 +546,7 @@ export async function deleteVisit(formData: FormData): Promise<void> {
 export async function uploadEvidence(formData: FormData): Promise<void> {
   const projectId = requireProjectId(formData);
   const visitId = requireVisitId(formData, projectId);
-  const { supabase, user } = await requireUser();
+  const { user } = await requireUser();
 
   if (!(await assertVisitBelongsToProject(projectId, visitId))) {
     visitsRedirect(projectId, { error: "Visit not found." });
@@ -370,59 +562,113 @@ export async function uploadEvidence(formData: FormData): Promise<void> {
 
   if (!parsed.success) {
     visitRedirect(projectId, visitId, {
-      error: parsed.error.issues[0]?.message ?? "Invalid input.",
-    });
-  }
-  if (!evidenceMimeTypeMatchesType(file.type, parsed.data.type)) {
-    visitRedirect(projectId, visitId, {
-      error: `The uploaded file type (${file.type}) does not match ${parsed.data.type}.`,
+      error: firstValidationMessage(parsed),
     });
   }
 
-  const storagePath = createEvidenceStoragePath(projectId, visitId, file.name);
-  const { error: uploadError } = await supabase.storage
-    .from(VISIT_EVIDENCE_BUCKET)
-    .upload(storagePath, file, { contentType: file.type, upsert: false });
-
-  if (uploadError) {
-    visitRedirect(projectId, visitId, { error: uploadError.message });
-  }
-
-  const { data, error } = await supabase
-    .from("evidence")
-    .insert({
-      project_id: projectId,
-      visit_id: visitId,
-      type: parsed.data.type,
-      storage_path: storagePath,
-      original_filename: file.name,
-      mime_type: file.type,
-      size_bytes: file.size,
-      zone_id: parsed.data.zoneId,
-      trade_id: parsed.data.tradeId,
-      manual_note: parsed.data.manualNote,
-      uploaded_by: user.id,
-    })
-    .select("id");
-
-  if (error) {
-    await supabase.storage.from(VISIT_EVIDENCE_BUCKET).remove([storagePath]);
-    visitRedirect(projectId, visitId, { error: error.message });
-  }
-  if (!data || data.length === 0) {
-    await supabase.storage.from(VISIT_EVIDENCE_BUCKET).remove([storagePath]);
-    visitRedirect(projectId, visitId, { error: "You do not have permission to upload evidence." });
+  const result = await persistEvidenceUpload({
+    projectId,
+    visitId,
+    file,
+    metadata: parsed.data,
+    uploadedBy: user.id,
+  });
+  if (!result.ok) {
+    visitRedirect(projectId, visitId, { error: result.error });
   }
 
   revalidatePath(`/projects/${projectId}/visits`);
-  visitRedirect(projectId, visitId, { ok: "Evidence uploaded." });
+  visitRedirect(projectId, visitId, { ok: result.message });
+}
+
+export async function uploadEvidenceBatch(formData: FormData): Promise<UploadEvidenceBatchResult> {
+  const projectId = uuidSchema.safeParse(formData.get("projectId"));
+  if (!projectId.success) {
+    return { ok: false, error: "Invalid project.", uploadedCount: 0 };
+  }
+  const visitId = uuidSchema.safeParse(formData.get("visitId"));
+  if (!visitId.success) {
+    return { ok: false, error: "Invalid visit.", uploadedCount: 0 };
+  }
+
+  const { user } = await requireUser();
+  if (!(await assertVisitBelongsToProject(projectId.data, visitId.data))) {
+    return { ok: false, error: "Visit not found.", uploadedCount: 0 };
+  }
+
+  const files = readEvidenceFiles(formData);
+  if (files.length === 0) {
+    return { ok: false, error: "Choose at least one evidence file.", uploadedCount: 0 };
+  }
+
+  let uploadedCount = 0;
+  let lastSavedAt: string | undefined;
+  const errors: string[] = [];
+
+  for (const file of files) {
+    const fileError = evidenceFileValidationError(file);
+    if (fileError) {
+      errors.push(`${file.name}: ${fileError}`);
+      continue;
+    }
+
+    const parsed = evidenceMetadataSchema.safeParse({
+      type: evidenceTypeFromMimeType(file.type),
+      zoneId: formData.get("zoneId"),
+      tradeId: formData.get("tradeId"),
+      manualNote: formData.get("manualNote"),
+    });
+
+    if (!parsed.success) {
+      errors.push(`${file.name}: ${firstValidationMessage(parsed)}`);
+      continue;
+    }
+
+    const result = await persistEvidenceUpload({
+      projectId: projectId.data,
+      visitId: visitId.data,
+      file,
+      metadata: parsed.data,
+      uploadedBy: user.id,
+    });
+
+    if (result.ok) {
+      uploadedCount += 1;
+      lastSavedAt = result.savedAt;
+    } else {
+      errors.push(`${file.name}: ${result.error}`);
+    }
+  }
+
+  if (uploadedCount > 0) {
+    revalidatePath(`/projects/${projectId.data}/visits`);
+  }
+
+  if (errors.length > 0) {
+    return {
+      ok: false,
+      error: errors.slice(0, 3).join(" "),
+      uploadedCount,
+      savedAt: lastSavedAt,
+      message:
+        uploadedCount > 0
+          ? `${uploadedCount} file${uploadedCount === 1 ? "" : "s"} uploaded.`
+          : undefined,
+    };
+  }
+
+  return {
+    ok: true,
+    uploadedCount,
+    savedAt: lastSavedAt ?? new Date().toISOString(),
+    message: `${uploadedCount} file${uploadedCount === 1 ? "" : "s"} uploaded.`,
+  };
 }
 
 export async function updateEvidence(formData: FormData): Promise<void> {
   const projectId = requireProjectId(formData);
   const visitId = requireVisitId(formData, projectId);
   const evidenceId = requireEvidenceId(formData, projectId, visitId);
-  const { supabase } = await requireUser();
   const parsed = evidenceMetadataSchema.safeParse({
     type: formData.get("type"),
     zoneId: formData.get("zoneId"),
@@ -432,34 +678,56 @@ export async function updateEvidence(formData: FormData): Promise<void> {
 
   if (!parsed.success) {
     visitRedirect(projectId, visitId, {
-      error: parsed.error.issues[0]?.message ?? "Invalid input.",
+      error: firstValidationMessage(parsed),
     });
   }
 
-  const { data, error } = await supabase
-    .from("evidence")
-    .update({
-      type: parsed.data.type,
-      zone_id: parsed.data.zoneId,
-      trade_id: parsed.data.tradeId,
-      manual_note: parsed.data.manualNote,
-    })
-    .eq("id", evidenceId)
-    .eq("project_id", projectId)
-    .eq("visit_id", visitId)
-    .select("id");
-
-  if (error) {
-    visitRedirect(projectId, visitId, { error: error.message });
-  }
-  if (!data || data.length === 0) {
-    visitRedirect(projectId, visitId, {
-      error: "You do not have permission to update this evidence.",
-    });
+  const result = await persistEvidenceMetadataUpdate(projectId, visitId, evidenceId, parsed.data);
+  if (!result.ok) {
+    visitRedirect(projectId, visitId, { error: result.error });
   }
 
-  revalidatePath(`/projects/${projectId}/visits`);
-  visitRedirect(projectId, visitId, { ok: "Evidence updated." });
+  visitRedirect(projectId, visitId, { ok: result.message });
+}
+
+export interface EvidenceMetadataSaveInput {
+  projectId: string;
+  visitId: string;
+  evidenceId: string;
+  type: string;
+  zoneId: string;
+  tradeId: string;
+  manualNote: string;
+}
+
+export async function saveEvidenceMetadata(
+  input: EvidenceMetadataSaveInput,
+): Promise<SaveActionResult> {
+  const projectId = uuidSchema.safeParse(input.projectId);
+  if (!projectId.success) {
+    return { ok: false, error: "Invalid project." };
+  }
+  const visitId = uuidSchema.safeParse(input.visitId);
+  if (!visitId.success) {
+    return { ok: false, error: "Invalid visit." };
+  }
+  const evidenceId = uuidSchema.safeParse(input.evidenceId);
+  if (!evidenceId.success) {
+    return { ok: false, error: "Invalid evidence item." };
+  }
+
+  const parsed = evidenceMetadataSchema.safeParse({
+    type: input.type,
+    zoneId: input.zoneId,
+    tradeId: input.tradeId,
+    manualNote: input.manualNote,
+  });
+
+  if (!parsed.success) {
+    return { ok: false, error: firstValidationMessage(parsed) };
+  }
+
+  return persistEvidenceMetadataUpdate(projectId.data, visitId.data, evidenceId.data, parsed.data);
 }
 
 export async function deleteEvidence(formData: FormData): Promise<void> {

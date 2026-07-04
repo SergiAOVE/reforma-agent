@@ -1,22 +1,22 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { EVIDENCE_TYPES, type VisitTextExtractionJobType } from "@reforma/core";
+import { type VisitTextExtractionJobType } from "@reforma/core";
 
 import { loadProjectAccess } from "../../../../../lib/project-access";
 import { VISIT_EVIDENCE_BUCKET } from "../../../../../lib/storage";
 import { DecisionReviewForm, IssueReviewForm, SummaryReviewForm } from "../../review-ui";
 import {
-  deleteEvidence,
   deleteVisit,
   enqueueAudioTranscription,
   enqueueVisitTextExtraction,
   setVisitStatus,
   updateAudioTranscription,
-  updateEvidence,
-  updateVisit,
-  uploadEvidence,
 } from "../actions";
+import { EvidenceMetadataForm } from "./evidence-metadata-form";
+import { EvidenceUploadPanel } from "./evidence-upload-panel";
+import { VisitAutosaveForm } from "./visit-autosave-form";
+import { VisitTabs } from "./visit-tabs";
 
 interface VisitPageProps {
   params: Promise<{ projectId: string; visitId: string }>;
@@ -29,43 +29,11 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function ReferenceSelects({
-  zones,
-  trades,
-  defaults,
-  disabled,
-}: {
-  zones: { id: string; name: string }[];
-  trades: { id: string; name: string }[];
-  defaults?: { zoneId?: string | null; tradeId?: string | null };
-  disabled?: boolean;
-}) {
-  return (
-    <div className="grid two">
-      <label className="field">
-        <span>Zone</span>
-        <select name="zoneId" defaultValue={defaults?.zoneId ?? ""} disabled={disabled}>
-          <option value="">None</option>
-          {zones.map((zone) => (
-            <option key={zone.id} value={zone.id}>
-              {zone.name}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="field">
-        <span>Trade</span>
-        <select name="tradeId" defaultValue={defaults?.tradeId ?? ""} disabled={disabled}>
-          <option value="">None</option>
-          {trades.map((trade) => (
-            <option key={trade.id} value={trade.id}>
-              {trade.name}
-            </option>
-          ))}
-        </select>
-      </label>
-    </div>
-  );
+function formatDateTime(value: string): string {
+  return new Intl.DateTimeFormat("en", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
 }
 
 function EvidencePreview({
@@ -134,7 +102,7 @@ export default async function VisitPage({ params, searchParams }: VisitPageProps
     supabase
       .from("visits")
       .select(
-        "id, title, visit_date, status, general_status, summary, human_notes, primary_zone_id, primary_trade_id, published_at, summary_source, summary_review_state",
+        "id, title, visit_date, status, general_status, summary, human_notes, primary_zone_id, primary_trade_id, published_at, updated_at, summary_source, summary_review_state",
       )
       .eq("id", visitId)
       .eq("project_id", project.id)
@@ -142,7 +110,7 @@ export default async function VisitPage({ params, searchParams }: VisitPageProps
     supabase
       .from("evidence")
       .select(
-        "id, type, storage_path, original_filename, mime_type, size_bytes, zone_id, trade_id, manual_note, created_at, zones(name), trades(name)",
+        "id, type, storage_path, original_filename, mime_type, size_bytes, zone_id, trade_id, manual_note, created_at, updated_at, zones(name), trades(name)",
       )
       .eq("project_id", project.id)
       .eq("visit_id", visitId)
@@ -289,399 +257,292 @@ export default async function VisitPage({ params, searchParams }: VisitPageProps
         </p>
       ) : null}
 
-      <section className="card">
-        <h2>Visit details</h2>
-        <form action={updateVisit} className="compact-form">
-          <input type="hidden" name="projectId" value={project.id} />
-          <input type="hidden" name="visitId" value={visit.id} />
-          <div className="grid two">
-            <label className="field">
-              <span>Title</span>
-              <input
-                name="title"
-                defaultValue={visit.title}
-                required
-                maxLength={180}
-                disabled={!canEdit}
-              />
-            </label>
-            <label className="field">
-              <span>Date</span>
-              <input
-                name="visitDate"
-                type="date"
-                defaultValue={visit.visit_date}
-                required
-                disabled={!canEdit}
-              />
-            </label>
-          </div>
-          <div className="grid two">
-            <label className="field">
-              <span>Primary zone</span>
-              <select
-                name="primaryZoneId"
-                defaultValue={visit.primary_zone_id ?? ""}
-                disabled={!canEdit}
-              >
-                <option value="">None</option>
-                {safeZones.map((zone) => (
-                  <option key={zone.id} value={zone.id}>
-                    {zone.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="field">
-              <span>Primary trade</span>
-              <select
-                name="primaryTradeId"
-                defaultValue={visit.primary_trade_id ?? ""}
-                disabled={!canEdit}
-              >
-                <option value="">None</option>
-                {safeTrades.map((trade) => (
-                  <option key={trade.id} value={trade.id}>
-                    {trade.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-          <label className="field">
-            <span>General status</span>
-            <input
-              name="generalStatus"
-              defaultValue={visit.general_status ?? ""}
-              maxLength={240}
-              disabled={!canEdit}
-            />
-          </label>
-          <label className="field">
-            <span>Human notes</span>
-            <textarea
-              name="humanNotes"
-              defaultValue={visit.human_notes ?? ""}
-              rows={4}
-              maxLength={2000}
-              disabled={!canEdit}
-            />
-          </label>
-          <label className="field">
-            <span>Summary</span>
-            <textarea
-              name="summary"
-              defaultValue={visit.summary ?? ""}
-              rows={3}
-              maxLength={2000}
-              disabled={!canEdit}
-            />
-          </label>
-          <button type="submit" disabled={!canEdit}>
-            Save visit
-          </button>
-        </form>
-
-        {canEdit ? (
-          <div className="button-row">
-            <form action={setVisitStatus}>
-              <input type="hidden" name="projectId" value={project.id} />
-              <input type="hidden" name="visitId" value={visit.id} />
-              <input type="hidden" name="status" value="published" />
-              <button type="submit">Publish</button>
-            </form>
-            <form action={setVisitStatus}>
-              <input type="hidden" name="projectId" value={project.id} />
-              <input type="hidden" name="visitId" value={visit.id} />
-              <input type="hidden" name="status" value="archived" />
-              <button type="submit" className="secondary">
-                Archive
-              </button>
-            </form>
-            <form action={setVisitStatus}>
-              <input type="hidden" name="projectId" value={project.id} />
-              <input type="hidden" name="visitId" value={visit.id} />
-              <input type="hidden" name="status" value="draft" />
-              <button type="submit" className="secondary">
-                Mark draft
-              </button>
-            </form>
-            <form action={deleteVisit}>
-              <input type="hidden" name="projectId" value={project.id} />
-              <input type="hidden" name="visitId" value={visit.id} />
-              <button type="submit" className="danger">
-                Delete visit
-              </button>
-            </form>
-          </div>
-        ) : null}
-      </section>
-
-      <section className="card">
-        <h2>Text extraction</h2>
-        <div className="button-row">
-          {TEXT_EXTRACTION_JOBS.map((definition) => {
-            const job = latestExtractionJobByType.get(definition.type);
-            const isRunning = job?.status === "pending" || job?.status === "processing";
-
-            return (
-              <form key={definition.type} action={enqueueVisitTextExtraction}>
-                <input type="hidden" name="projectId" value={project.id} />
-                <input type="hidden" name="visitId" value={visit.id} />
-                <input type="hidden" name="jobType" value={definition.type} />
-                <button type="submit" disabled={!canEdit || isRunning}>
-                  {isRunning ? `${definition.label} queued` : definition.label}
-                </button>
-                {job ? <span className={`badge status-${job.status}`}>{job.status}</span> : null}
-              </form>
-            );
-          })}
-        </div>
-        {TEXT_EXTRACTION_JOBS.map((definition) => {
-          const job = latestExtractionJobByType.get(definition.type);
-          return job?.error_message ? (
-            <p key={definition.type} className="notice error">
-              {definition.label}: {job.error_message}
-            </p>
-          ) : null;
-        })}
-      </section>
-
-      <section className="card">
-        <h2>AI drafts</h2>
-        {!hasAiSummaryDraft && safeIssueDrafts.length === 0 && safeDecisionDrafts.length === 0 ? (
-          <p className="muted">No AI drafts yet.</p>
-        ) : null}
-
-        {hasAiSummaryDraft ? (
-          <>
-            <h3>Summary</h3>
-            <SummaryReviewForm
+      <VisitTabs
+        details={
+          <section className="card">
+            <VisitAutosaveForm
               projectId={project.id}
               visit={visit}
+              zones={safeZones}
+              trades={safeTrades}
               canEdit={canEdit}
-              returnTo="visit"
             />
-          </>
-        ) : null}
-
-        {safeIssueDrafts.length > 0 ? (
+          </section>
+        }
+        evidence={
           <>
-            <h3>Issues</h3>
-            <ul className="stack-list">
-              {safeIssueDrafts.map((issue) => (
-                <li key={issue.id} className="stack-item">
-                  <IssueReviewForm
-                    projectId={project.id}
-                    issue={issue}
-                    zones={safeZones}
-                    trades={safeTrades}
-                    contractItems={safeContractItems}
-                    canEdit={canEdit}
-                    returnTo="visit"
-                  />
-                </li>
-              ))}
-            </ul>
-          </>
-        ) : null}
+            <section className="card">
+              <EvidenceUploadPanel
+                projectId={project.id}
+                visitId={visit.id}
+                zones={safeZones}
+                trades={safeTrades}
+                canEdit={canEdit}
+              />
+            </section>
 
-        {safeDecisionDrafts.length > 0 ? (
+            <section className="card">
+              <h2>Evidence</h2>
+              {evidenceWithUrls.length === 0 ? (
+                <p className="muted">No evidence yet.</p>
+              ) : (
+                <ul className="stack-list">
+                  {evidenceWithUrls.map((item) => (
+                    <li key={item.id} className="stack-item">
+                      {(() => {
+                        const transcription = transcriptionByEvidenceId.get(item.id);
+                        const transcriptionJob = latestJobByEvidenceId.get(item.id);
+                        const isTranscriptionRunning =
+                          transcriptionJob?.status === "pending" ||
+                          transcriptionJob?.status === "processing";
+
+                        return (
+                          <>
+                            <div className="split-row">
+                              <div>
+                                <strong>{item.original_filename}</strong>
+                                <div className="muted">
+                                  {item.type} | {item.mime_type} | {formatBytes(item.size_bytes)}
+                                  {" | "}Last saved {formatDateTime(item.updated_at)}
+                                </div>
+                              </div>
+                              {item.signedUrl ? (
+                                <a href={item.signedUrl} target="_blank" rel="noreferrer">
+                                  Open
+                                </a>
+                              ) : null}
+                            </div>
+                            <EvidencePreview
+                              signedUrl={item.signedUrl}
+                              type={item.type}
+                              filename={item.original_filename}
+                            />
+
+                            {item.type === "audio" ? (
+                              <div className="transcript-panel">
+                                <div className="split-row">
+                                  <strong>Transcript</strong>
+                                  {transcriptionJob ? (
+                                    <span className={`badge status-${transcriptionJob.status}`}>
+                                      {transcriptionJob.status}
+                                    </span>
+                                  ) : null}
+                                </div>
+                                {transcription ? (
+                                  <form action={updateAudioTranscription} className="compact-form">
+                                    <input type="hidden" name="projectId" value={project.id} />
+                                    <input type="hidden" name="visitId" value={visit.id} />
+                                    <input
+                                      type="hidden"
+                                      name="transcriptionId"
+                                      value={transcription.id}
+                                    />
+                                    <p className="muted">
+                                      {transcription.provider ?? "unknown"} |{" "}
+                                      {transcription.model ?? "unknown"}
+                                      {transcription.language ? ` | ${transcription.language}` : ""}
+                                    </p>
+                                    <label className="field">
+                                      <span>Reviewed transcript</span>
+                                      <textarea
+                                        name="editedTranscript"
+                                        defaultValue={
+                                          transcription.edited_transcript ??
+                                          transcription.raw_transcript
+                                        }
+                                        rows={5}
+                                        disabled={!canEdit}
+                                      />
+                                    </label>
+                                    <button type="submit" disabled={!canEdit}>
+                                      Save transcript
+                                    </button>
+                                  </form>
+                                ) : (
+                                  <>
+                                    {transcriptionJob?.error_message ? (
+                                      <p className="notice error">
+                                        {transcriptionJob.error_message}
+                                      </p>
+                                    ) : null}
+                                    {canEdit ? (
+                                      <form action={enqueueAudioTranscription}>
+                                        <input type="hidden" name="projectId" value={project.id} />
+                                        <input type="hidden" name="visitId" value={visit.id} />
+                                        <input type="hidden" name="evidenceId" value={item.id} />
+                                        <button type="submit" disabled={isTranscriptionRunning}>
+                                          {isTranscriptionRunning
+                                            ? "Transcription queued"
+                                            : "Transcribe audio"}
+                                        </button>
+                                      </form>
+                                    ) : (
+                                      <p className="muted">No transcript yet.</p>
+                                    )}
+                                  </>
+                                )}
+                              </div>
+                            ) : null}
+
+                            <EvidenceMetadataForm
+                              projectId={project.id}
+                              visitId={visit.id}
+                              evidence={item}
+                              zones={safeZones}
+                              trades={safeTrades}
+                              canEdit={canEdit}
+                            />
+                          </>
+                        );
+                      })()}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          </>
+        }
+        review={
           <>
-            <h3>Decisions</h3>
-            <ul className="stack-list">
-              {safeDecisionDrafts.map((decision) => (
-                <li key={decision.id} className="stack-item">
-                  <DecisionReviewForm
-                    projectId={project.id}
-                    decision={decision}
-                    zones={safeZones}
-                    trades={safeTrades}
-                    canEdit={canEdit}
-                    returnTo="visit"
-                  />
-                </li>
-              ))}
-            </ul>
-          </>
-        ) : null}
-      </section>
+            <section className="card">
+              <h2>Visit status</h2>
+              {canEdit ? (
+                <>
+                  <div className="button-row">
+                    <form action={setVisitStatus}>
+                      <input type="hidden" name="projectId" value={project.id} />
+                      <input type="hidden" name="visitId" value={visit.id} />
+                      <input type="hidden" name="status" value="published" />
+                      <button type="submit">Publish</button>
+                    </form>
+                    <form action={setVisitStatus}>
+                      <input type="hidden" name="projectId" value={project.id} />
+                      <input type="hidden" name="visitId" value={visit.id} />
+                      <input type="hidden" name="status" value="archived" />
+                      <button type="submit" className="secondary">
+                        Archive
+                      </button>
+                    </form>
+                    <form action={setVisitStatus}>
+                      <input type="hidden" name="projectId" value={project.id} />
+                      <input type="hidden" name="visitId" value={visit.id} />
+                      <input type="hidden" name="status" value="draft" />
+                      <button type="submit" className="secondary">
+                        Mark draft
+                      </button>
+                    </form>
+                  </div>
+                  <div className="danger-zone">
+                    <form action={deleteVisit}>
+                      <input type="hidden" name="projectId" value={project.id} />
+                      <input type="hidden" name="visitId" value={visit.id} />
+                      <button type="submit" className="danger">
+                        Delete visit
+                      </button>
+                    </form>
+                  </div>
+                </>
+              ) : (
+                <p className="muted">You can view this visit but cannot change its status.</p>
+              )}
+            </section>
 
-      <section className="card">
-        <h2>Upload evidence</h2>
-        <form action={uploadEvidence} encType="multipart/form-data" className="compact-form">
-          <input type="hidden" name="projectId" value={project.id} />
-          <input type="hidden" name="visitId" value={visit.id} />
-          <label className="field">
-            <span>File</span>
-            <input
-              name="file"
-              type="file"
-              accept="image/*,audio/*,video/*,.pdf,.txt,.csv,.doc,.docx,.xls,.xlsx,text/plain,text/csv,application/pdf"
-              required
-              disabled={!canEdit}
-            />
-          </label>
-          <label className="field">
-            <span>Type</span>
-            <select name="type" defaultValue="photo" disabled={!canEdit}>
-              {EVIDENCE_TYPES.map((type) => (
-                <option key={type} value={type}>
-                  {type}
-                </option>
-              ))}
-            </select>
-          </label>
-          <ReferenceSelects zones={safeZones} trades={safeTrades} disabled={!canEdit} />
-          <label className="field">
-            <span>Note</span>
-            <textarea name="manualNote" rows={3} maxLength={2000} disabled={!canEdit} />
-          </label>
-          <button type="submit" disabled={!canEdit}>
-            Upload evidence
-          </button>
-        </form>
-      </section>
-
-      <section className="card">
-        <h2>Evidence</h2>
-        {evidenceWithUrls.length === 0 ? (
-          <p className="muted">No evidence yet.</p>
-        ) : (
-          <ul className="stack-list">
-            {evidenceWithUrls.map((item) => (
-              <li key={item.id} className="stack-item">
-                {(() => {
-                  const transcription = transcriptionByEvidenceId.get(item.id);
-                  const transcriptionJob = latestJobByEvidenceId.get(item.id);
-                  const isTranscriptionRunning =
-                    transcriptionJob?.status === "pending" ||
-                    transcriptionJob?.status === "processing";
+            <section className="card">
+              <h2>Text extraction</h2>
+              <div className="button-row">
+                {TEXT_EXTRACTION_JOBS.map((definition) => {
+                  const job = latestExtractionJobByType.get(definition.type);
+                  const isRunning = job?.status === "pending" || job?.status === "processing";
 
                   return (
-                    <>
-                      <div className="split-row">
-                        <div>
-                          <strong>{item.original_filename}</strong>
-                          <div className="muted">
-                            {item.type} | {item.mime_type} | {formatBytes(item.size_bytes)} |{" "}
-                            {item.zones?.name ?? "No zone"} | {item.trades?.name ?? "No trade"}
-                          </div>
-                        </div>
-                        {item.signedUrl ? (
-                          <a href={item.signedUrl} target="_blank" rel="noreferrer">
-                            Open
-                          </a>
-                        ) : null}
-                      </div>
-                      <EvidencePreview
-                        signedUrl={item.signedUrl}
-                        type={item.type}
-                        filename={item.original_filename}
-                      />
-
-                      {item.type === "audio" ? (
-                        <div className="transcript-panel">
-                          <div className="split-row">
-                            <strong>Transcript</strong>
-                            {transcriptionJob ? (
-                              <span className={`badge status-${transcriptionJob.status}`}>
-                                {transcriptionJob.status}
-                              </span>
-                            ) : null}
-                          </div>
-                          {transcription ? (
-                            <form action={updateAudioTranscription} className="compact-form">
-                              <input type="hidden" name="projectId" value={project.id} />
-                              <input type="hidden" name="visitId" value={visit.id} />
-                              <input
-                                type="hidden"
-                                name="transcriptionId"
-                                value={transcription.id}
-                              />
-                              <p className="muted">
-                                {transcription.provider ?? "unknown"} |{" "}
-                                {transcription.model ?? "unknown"}
-                                {transcription.language ? ` | ${transcription.language}` : ""}
-                              </p>
-                              <label className="field">
-                                <span>Reviewed transcript</span>
-                                <textarea
-                                  name="editedTranscript"
-                                  defaultValue={
-                                    transcription.edited_transcript ?? transcription.raw_transcript
-                                  }
-                                  rows={5}
-                                  disabled={!canEdit}
-                                />
-                              </label>
-                              <button type="submit" disabled={!canEdit}>
-                                Save transcript
-                              </button>
-                            </form>
-                          ) : (
-                            <>
-                              {transcriptionJob?.error_message ? (
-                                <p className="notice error">{transcriptionJob.error_message}</p>
-                              ) : null}
-                              {canEdit ? (
-                                <form action={enqueueAudioTranscription}>
-                                  <input type="hidden" name="projectId" value={project.id} />
-                                  <input type="hidden" name="visitId" value={visit.id} />
-                                  <input type="hidden" name="evidenceId" value={item.id} />
-                                  <button type="submit" disabled={isTranscriptionRunning}>
-                                    {isTranscriptionRunning
-                                      ? "Transcription queued"
-                                      : "Transcribe audio"}
-                                  </button>
-                                </form>
-                              ) : (
-                                <p className="muted">No transcript yet.</p>
-                              )}
-                            </>
-                          )}
-                        </div>
+                    <form key={definition.type} action={enqueueVisitTextExtraction}>
+                      <input type="hidden" name="projectId" value={project.id} />
+                      <input type="hidden" name="visitId" value={visit.id} />
+                      <input type="hidden" name="jobType" value={definition.type} />
+                      <button type="submit" disabled={!canEdit || isRunning}>
+                        {isRunning ? `${definition.label} queued` : definition.label}
+                      </button>
+                      {job ? (
+                        <span className={`badge status-${job.status}`}>{job.status}</span>
                       ) : null}
+                    </form>
+                  );
+                })}
+              </div>
+              {TEXT_EXTRACTION_JOBS.map((definition) => {
+                const job = latestExtractionJobByType.get(definition.type);
+                return job?.error_message ? (
+                  <p key={definition.type} className="notice error">
+                    {definition.label}: {job.error_message}
+                  </p>
+                ) : null;
+              })}
+            </section>
 
-                      <form action={updateEvidence} className="inline-edit">
-                        <input type="hidden" name="projectId" value={project.id} />
-                        <input type="hidden" name="visitId" value={visit.id} />
-                        <input type="hidden" name="evidenceId" value={item.id} />
-                        <input type="hidden" name="type" value={item.type} />
-                        <ReferenceSelects
+            <section className="card">
+              <h2>AI drafts</h2>
+              {!hasAiSummaryDraft &&
+              safeIssueDrafts.length === 0 &&
+              safeDecisionDrafts.length === 0 ? (
+                <p className="muted">No AI drafts yet.</p>
+              ) : null}
+
+              {hasAiSummaryDraft ? (
+                <>
+                  <h3>Summary</h3>
+                  <SummaryReviewForm
+                    projectId={project.id}
+                    visit={visit}
+                    canEdit={canEdit}
+                    returnTo="visit"
+                  />
+                </>
+              ) : null}
+
+              {safeIssueDrafts.length > 0 ? (
+                <>
+                  <h3>Issues</h3>
+                  <ul className="stack-list">
+                    {safeIssueDrafts.map((issue) => (
+                      <li key={issue.id} className="stack-item">
+                        <IssueReviewForm
+                          projectId={project.id}
+                          issue={issue}
                           zones={safeZones}
                           trades={safeTrades}
-                          defaults={{ zoneId: item.zone_id, tradeId: item.trade_id }}
-                          disabled={!canEdit}
+                          contractItems={safeContractItems}
+                          canEdit={canEdit}
+                          returnTo="visit"
                         />
-                        <label className="field">
-                          <span>Note</span>
-                          <textarea
-                            name="manualNote"
-                            defaultValue={item.manual_note ?? ""}
-                            rows={2}
-                            disabled={!canEdit}
-                          />
-                        </label>
-                        <div className="button-row">
-                          <button type="submit" disabled={!canEdit}>
-                            Save evidence
-                          </button>
-                          {canEdit ? (
-                            <button type="submit" formAction={deleteEvidence} className="danger">
-                              Delete
-                            </button>
-                          ) : null}
-                        </div>
-                      </form>
-                    </>
-                  );
-                })()}
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              ) : null}
+
+              {safeDecisionDrafts.length > 0 ? (
+                <>
+                  <h3>Decisions</h3>
+                  <ul className="stack-list">
+                    {safeDecisionDrafts.map((decision) => (
+                      <li key={decision.id} className="stack-item">
+                        <DecisionReviewForm
+                          projectId={project.id}
+                          decision={decision}
+                          zones={safeZones}
+                          trades={safeTrades}
+                          canEdit={canEdit}
+                          returnTo="visit"
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              ) : null}
+            </section>
+          </>
+        }
+      />
     </>
   );
 }

@@ -227,9 +227,11 @@ describe("evidenceMetadataSchema", () => {
 describe("evidence MIME helpers", () => {
   it("maps common MIME families to evidence types", () => {
     expect(evidenceTypeFromMimeType("image/jpeg")).toBe("photo");
+    expect(evidenceTypeFromMimeType("image/heic")).toBe("photo");
     expect(evidenceTypeFromMimeType("audio/webm")).toBe("audio");
     expect(evidenceTypeFromMimeType("video/mp4")).toBe("video");
     expect(evidenceTypeFromMimeType("application/pdf")).toBe("document");
+    expect(evidenceTypeFromMimeType("text/csv")).toBe("document");
     expect(
       evidenceTypeFromMimeType(
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
