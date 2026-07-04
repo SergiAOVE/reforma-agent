@@ -34,10 +34,10 @@ function requireProjectId(formData: FormData): string {
   return parsed.data;
 }
 
-function requireDocumentId(formData: FormData, projectId: string): string {
-  const parsed = uuidSchema.safeParse(formData.get("documentId"));
+function requireUploadBatchId(formData: FormData, projectId: string): string {
+  const parsed = uuidSchema.safeParse(formData.get("uploadBatchId"));
   if (!parsed.success) {
-    documentsRedirect(projectId, { error: "Invalid document." });
+    documentsRedirect(projectId, { error: "Invalid document upload group." });
   }
   return parsed.data;
 }
@@ -96,11 +96,15 @@ async function persistDocumentUpload({
   projectId,
   file,
   metadata,
+  uploadBatchId,
+  uploadBatchTitle,
   uploadedBy,
 }: {
   projectId: string;
   file: File;
   metadata: DocumentMetadataInput;
+  uploadBatchId: string;
+  uploadBatchTitle: string;
   uploadedBy: string;
 }): Promise<SaveDocumentResult> {
   const { supabase } = await requireUser();
@@ -123,6 +127,8 @@ async function persistDocumentUpload({
       type: metadata.type,
       title: metadata.title,
       notes: metadata.notes,
+      upload_batch_id: uploadBatchId,
+      upload_batch_title: uploadBatchTitle,
       storage_path: storagePath,
       original_filename: file.name,
       mime_type: file.type,
@@ -149,14 +155,18 @@ async function persistDocumentUpload({
 
 async function persistDocumentMetadataUpdate(
   projectId: string,
-  documentId: string,
+  uploadBatchId: string,
   values: DocumentMetadataInput,
 ): Promise<SaveDocumentResult> {
   const { supabase } = await requireUser();
   const { data, error } = await supabase
     .from("documents")
-    .update({ type: values.type, title: values.title, notes: values.notes })
-    .eq("id", documentId)
+    .update({
+      type: values.type,
+      upload_batch_title: values.title,
+      notes: values.notes,
+    })
+    .eq("upload_batch_id", uploadBatchId)
     .eq("project_id", projectId)
     .select("id, updated_at");
 
@@ -180,6 +190,7 @@ export async function uploadDocument(formData: FormData): Promise<void> {
   const projectId = requireProjectId(formData);
   const { user } = await requireUser();
   const file = readDocumentFile(formData, projectId);
+  const uploadBatchId = crypto.randomUUID();
 
   const parsed = documentMetadataSchema.safeParse({
     type: formData.get("type"),
@@ -194,7 +205,12 @@ export async function uploadDocument(formData: FormData): Promise<void> {
   const result = await persistDocumentUpload({
     projectId,
     file,
-    metadata: parsed.data,
+    metadata: {
+      ...parsed.data,
+      title: documentTitleFromFilename(file.name),
+    },
+    uploadBatchId,
+    uploadBatchTitle: parsed.data.title,
     uploadedBy: user.id,
   });
   if (!result.ok) {
@@ -222,7 +238,16 @@ export async function uploadDocumentBatch(formData: FormData): Promise<UploadDoc
     return { ok: false, error: "Choose a valid document type.", uploadedCount: 0 };
   }
 
-  const commonNotes = formData.get("notes");
+  const batchMetadata = documentMetadataSchema.safeParse({
+    type: type.data,
+    title: formData.get("title"),
+    notes: formData.get("notes"),
+  });
+  if (!batchMetadata.success) {
+    return { ok: false, error: firstValidationMessage(batchMetadata), uploadedCount: 0 };
+  }
+
+  const uploadBatchId = crypto.randomUUID();
   let uploadedCount = 0;
   let lastSavedAt: string | undefined;
   const errors: string[] = [];
@@ -237,7 +262,7 @@ export async function uploadDocumentBatch(formData: FormData): Promise<UploadDoc
     const parsed = documentMetadataSchema.safeParse({
       type: type.data,
       title: documentTitleFromFilename(file.name),
-      notes: commonNotes,
+      notes: batchMetadata.data.notes,
     });
 
     if (!parsed.success) {
@@ -249,6 +274,8 @@ export async function uploadDocumentBatch(formData: FormData): Promise<UploadDoc
       projectId: projectId.data,
       file,
       metadata: parsed.data,
+      uploadBatchId,
+      uploadBatchTitle: batchMetadata.data.title,
       uploadedBy: user.id,
     });
 
@@ -287,7 +314,7 @@ export async function uploadDocumentBatch(formData: FormData): Promise<UploadDoc
 
 export async function updateDocument(formData: FormData): Promise<void> {
   const projectId = requireProjectId(formData);
-  const documentId = requireDocumentId(formData, projectId);
+  const uploadBatchId = requireUploadBatchId(formData, projectId);
   const parsed = documentMetadataSchema.safeParse({
     type: formData.get("type"),
     title: formData.get("title"),
@@ -298,7 +325,7 @@ export async function updateDocument(formData: FormData): Promise<void> {
     documentsRedirect(projectId, { error: firstValidationMessage(parsed) });
   }
 
-  const result = await persistDocumentMetadataUpdate(projectId, documentId, parsed.data);
+  const result = await persistDocumentMetadataUpdate(projectId, uploadBatchId, parsed.data);
   if (!result.ok) {
     documentsRedirect(projectId, { error: result.error });
   }
@@ -308,7 +335,7 @@ export async function updateDocument(formData: FormData): Promise<void> {
 
 export interface DocumentMetadataSaveInput {
   projectId: string;
-  documentId: string;
+  uploadBatchId: string;
   type: DocumentType;
   title: string;
   notes: string;
@@ -321,9 +348,9 @@ export async function saveDocumentMetadata(
   if (!projectId.success) {
     return { ok: false, error: "Invalid project." };
   }
-  const documentId = uuidSchema.safeParse(input.documentId);
-  if (!documentId.success) {
-    return { ok: false, error: "Invalid document." };
+  const uploadBatchId = uuidSchema.safeParse(input.uploadBatchId);
+  if (!uploadBatchId.success) {
+    return { ok: false, error: "Invalid document upload group." };
   }
 
   const parsed = documentMetadataSchema.safeParse({
@@ -336,28 +363,28 @@ export async function saveDocumentMetadata(
     return { ok: false, error: firstValidationMessage(parsed) };
   }
 
-  return persistDocumentMetadataUpdate(projectId.data, documentId.data, parsed.data);
+  return persistDocumentMetadataUpdate(projectId.data, uploadBatchId.data, parsed.data);
 }
 
 export async function deleteDocument(formData: FormData): Promise<void> {
   const projectId = requireProjectId(formData);
-  const documentId = requireDocumentId(formData, projectId);
+  const uploadBatchId = requireUploadBatchId(formData, projectId);
   const { supabase } = await requireUser();
 
-  const { data: document } = await supabase
+  const { data: documents } = await supabase
     .from("documents")
     .select("id, storage_path")
-    .eq("id", documentId)
+    .eq("upload_batch_id", uploadBatchId)
     .eq("project_id", projectId)
-    .maybeSingle();
+    .order("created_at");
 
-  if (!document) {
-    documentsRedirect(projectId, { error: "Document not found." });
+  if (!documents || documents.length === 0) {
+    documentsRedirect(projectId, { error: "Document upload group not found." });
   }
 
   const { error: storageError } = await supabase.storage
     .from(PROJECT_DOCUMENTS_BUCKET)
-    .remove([document.storage_path]);
+    .remove(documents.map((document) => document.storage_path));
 
   if (storageError) {
     documentsRedirect(projectId, { error: storageError.message });
@@ -366,7 +393,7 @@ export async function deleteDocument(formData: FormData): Promise<void> {
   const { data, error } = await supabase
     .from("documents")
     .delete()
-    .eq("id", documentId)
+    .eq("upload_batch_id", uploadBatchId)
     .eq("project_id", projectId)
     .select("id");
 
@@ -374,9 +401,11 @@ export async function deleteDocument(formData: FormData): Promise<void> {
     documentsRedirect(projectId, { error: error.message });
   }
   if (!data || data.length === 0) {
-    documentsRedirect(projectId, { error: "You do not have permission to delete this document." });
+    documentsRedirect(projectId, {
+      error: "You do not have permission to delete this document upload group.",
+    });
   }
 
   revalidatePath(`/projects/${projectId}/documents`);
-  documentsRedirect(projectId, { ok: "Document deleted." });
+  documentsRedirect(projectId, { ok: "Document upload group deleted." });
 }

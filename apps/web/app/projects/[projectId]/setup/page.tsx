@@ -1,14 +1,8 @@
 import Link from "next/link";
 
 import { loadProjectAccess } from "../../../../lib/project-access";
-import {
-  createTrade,
-  createZone,
-  deleteTrade,
-  deleteZone,
-  updateTrade,
-  updateZone,
-} from "./actions";
+import { createTrade, createZone } from "./actions";
+import { SetupEntityAutosaveForm } from "./setup-entity-autosave-form";
 
 interface ProjectSetupPageProps {
   params: Promise<{ projectId: string }>;
@@ -29,13 +23,13 @@ export default async function ProjectSetupPage({ params, searchParams }: Project
   const [{ data: zones }, { data: trades }] = await Promise.all([
     supabase
       .from("zones")
-      .select("id, name, description, sort_order")
+      .select("id, name, description, sort_order, updated_at")
       .eq("project_id", project.id)
       .order("sort_order")
       .order("name"),
     supabase
       .from("trades")
-      .select("id, name, description, sort_order")
+      .select("id, name, description, sort_order, updated_at")
       .eq("project_id", project.id)
       .order("sort_order")
       .order("name"),
@@ -95,49 +89,12 @@ export default async function ProjectSetupPage({ params, searchParams }: Project
           <ul className="stack-list">
             {(zones ?? []).map((zone) => (
               <li key={zone.id} className="stack-item">
-                <form action={updateZone} className="inline-edit">
-                  <input type="hidden" name="projectId" value={project.id} />
-                  <input type="hidden" name="zoneId" value={zone.id} />
-                  <label className="field">
-                    <span>Name</span>
-                    <input name="name" defaultValue={zone.name} required disabled={!canEdit} />
-                  </label>
-                  <label className="field">
-                    <span>Description</span>
-                    <textarea
-                      name="description"
-                      defaultValue={zone.description ?? ""}
-                      rows={2}
-                      disabled={!canEdit}
-                    />
-                  </label>
-                  <label className="field">
-                    <span>Sort order</span>
-                    <input
-                      name="sortOrder"
-                      type="number"
-                      min="0"
-                      max="10000"
-                      defaultValue={zone.sort_order}
-                      disabled={!canEdit}
-                    />
-                  </label>
-                  <div className="button-row">
-                    <button type="submit" disabled={!canEdit}>
-                      Save
-                    </button>
-                    {canEdit ? (
-                      <button
-                        type="submit"
-                        formAction={deleteZone}
-                        className="danger"
-                        aria-label={`Delete ${zone.name}`}
-                      >
-                        Delete
-                      </button>
-                    ) : null}
-                  </div>
-                </form>
+                <SetupEntityAutosaveForm
+                  projectId={project.id}
+                  entity="zone"
+                  item={zone}
+                  canEdit={canEdit}
+                />
               </li>
             ))}
           </ul>
@@ -175,49 +132,12 @@ export default async function ProjectSetupPage({ params, searchParams }: Project
           <ul className="stack-list">
             {(trades ?? []).map((trade) => (
               <li key={trade.id} className="stack-item">
-                <form action={updateTrade} className="inline-edit">
-                  <input type="hidden" name="projectId" value={project.id} />
-                  <input type="hidden" name="tradeId" value={trade.id} />
-                  <label className="field">
-                    <span>Name</span>
-                    <input name="name" defaultValue={trade.name} required disabled={!canEdit} />
-                  </label>
-                  <label className="field">
-                    <span>Description</span>
-                    <textarea
-                      name="description"
-                      defaultValue={trade.description ?? ""}
-                      rows={2}
-                      disabled={!canEdit}
-                    />
-                  </label>
-                  <label className="field">
-                    <span>Sort order</span>
-                    <input
-                      name="sortOrder"
-                      type="number"
-                      min="0"
-                      max="10000"
-                      defaultValue={trade.sort_order}
-                      disabled={!canEdit}
-                    />
-                  </label>
-                  <div className="button-row">
-                    <button type="submit" disabled={!canEdit}>
-                      Save
-                    </button>
-                    {canEdit ? (
-                      <button
-                        type="submit"
-                        formAction={deleteTrade}
-                        className="danger"
-                        aria-label={`Delete ${trade.name}`}
-                      >
-                        Delete
-                      </button>
-                    ) : null}
-                  </div>
-                </form>
+                <SetupEntityAutosaveForm
+                  projectId={project.id}
+                  entity="trade"
+                  item={trade}
+                  canEdit={canEdit}
+                />
               </li>
             ))}
           </ul>

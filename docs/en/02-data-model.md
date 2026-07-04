@@ -18,7 +18,7 @@
 | `visits`               | Site visits                                                 |
 | `evidence`             | Evidence (photos, audio, video, documents) for a visit      |
 | `audio_transcriptions` | Transcriptions (original + edited) of audio                 |
-| `documents`            | Technical documents (plan, quote, technical specification…) |
+| `documents`            | Technical document files, grouped into user-facing uploads  |
 | `contract_items`       | Budget line items                                           |
 | `issues`               | Issues                                                      |
 | `decisions`            | Pending decisions                                           |
@@ -103,6 +103,10 @@ and `storage_object_visit_id(name)` parses the second segment for visit evidence
 
 - `/projects/[projectId]/setup`: create/edit/delete zones and trades.
 - `/projects/[projectId]/documents`: upload private documents, edit metadata and delete files.
+- A document upload can contain multiple files. Each file remains one `documents` row with its
+  own Storage path, while `upload_batch_id` and `upload_batch_title` group those rows into one
+  user-facing library card. Editing or deleting the card applies to every row in that upload
+  group.
 - `/projects/[projectId]/budget`: create/edit/delete `contract_items` manually and import CSV.
 - CSV imports are validated with `parseBudgetCsv`. The importer accepts these headers:
   `code,title,description,trade,zone,quantity,unit,unit_price,total_amount,included_excluded,source_page,notes`.

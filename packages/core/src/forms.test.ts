@@ -94,6 +94,23 @@ describe("zoneTradeFormSchema", () => {
 
     expect(parsed).toEqual({ name: "Kitchen", description: null, sortOrder: 2 });
   });
+
+  it("rejects empty names and out-of-range sort orders", () => {
+    expect(
+      zoneTradeFormSchema.safeParse({
+        name: " ",
+        description: "",
+        sortOrder: "1",
+      }).success,
+    ).toBe(false);
+    expect(
+      zoneTradeFormSchema.safeParse({
+        name: "Kitchen",
+        description: "",
+        sortOrder: "10001",
+      }).success,
+    ).toBe(false);
+  });
 });
 
 describe("documentMetadataSchema", () => {

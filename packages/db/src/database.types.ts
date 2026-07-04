@@ -491,6 +491,8 @@ export type Database = {
           title: string;
           type: Database["public"]["Enums"]["document_type"];
           updated_at: string;
+          upload_batch_id: string;
+          upload_batch_title: string;
           uploaded_by: string | null;
         };
         Insert: {
@@ -505,6 +507,8 @@ export type Database = {
           title: string;
           type: Database["public"]["Enums"]["document_type"];
           updated_at?: string;
+          upload_batch_id?: string;
+          upload_batch_title: string;
           uploaded_by?: string | null;
         };
         Update: {
@@ -519,6 +523,8 @@ export type Database = {
           title?: string;
           type?: Database["public"]["Enums"]["document_type"];
           updated_at?: string;
+          upload_batch_id?: string;
+          upload_batch_title?: string;
           uploaded_by?: string | null;
         };
         Relationships: [

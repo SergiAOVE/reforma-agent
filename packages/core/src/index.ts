@@ -3,6 +3,7 @@
  */
 export const APP_NAME = "reforma-agent";
 
+export * from "./document-groups";
 export * from "./enums";
 export * from "./forms";
 export * from "./jobs";

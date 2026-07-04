@@ -9,6 +9,17 @@ import { requireUser } from "../../../../lib/auth";
 
 type SetupEntity = "zone" | "trade";
 
+export type SaveSetupEntityResult =
+  { ok: true; savedAt: string; message: string } | { ok: false; error: string; savedAt?: string };
+
+export interface SaveSetupEntityInput {
+  projectId: string;
+  entityId: string;
+  name: string;
+  description: string;
+  sortOrder: string;
+}
+
 function setupRedirect(projectId: string, params: { error?: string; ok?: string }): never {
   const query = new URLSearchParams();
   if (params.error) query.set("error", params.error);
@@ -39,6 +50,13 @@ function friendlyMutationError(entity: SetupEntity, message: string): string {
   return message;
 }
 
+function firstValidationMessage(parsed: {
+  success: false;
+  error: { issues: { message: string }[] };
+}) {
+  return parsed.error.issues[0]?.message ?? "Invalid input.";
+}
+
 async function createSetupEntity(formData: FormData, entity: SetupEntity): Promise<void> {
   const projectId = requireProjectId(formData);
   const { supabase } = await requireUser();
@@ -49,7 +67,7 @@ async function createSetupEntity(formData: FormData, entity: SetupEntity): Promi
   });
 
   if (!parsed.success) {
-    setupRedirect(projectId, { error: parsed.error.issues[0]?.message ?? "Invalid input." });
+    setupRedirect(projectId, { error: firstValidationMessage(parsed) });
   }
 
   const table = entity === "zone" ? "zones" : "trades";
@@ -77,7 +95,6 @@ async function createSetupEntity(formData: FormData, entity: SetupEntity): Promi
 async function updateSetupEntity(formData: FormData, entity: SetupEntity): Promise<void> {
   const projectId = requireProjectId(formData);
   const entityId = requireEntityId(formData, projectId, entity);
-  const { supabase } = await requireUser();
   const parsed = zoneTradeFormSchema.safeParse({
     name: formData.get("name"),
     description: formData.get("description"),
@@ -85,30 +102,89 @@ async function updateSetupEntity(formData: FormData, entity: SetupEntity): Promi
   });
 
   if (!parsed.success) {
-    setupRedirect(projectId, { error: parsed.error.issues[0]?.message ?? "Invalid input." });
+    setupRedirect(projectId, { error: firstValidationMessage(parsed) });
   }
 
+  const result = await persistSetupEntityUpdate(projectId, entityId, entity, {
+    name: parsed.data.name,
+    description: parsed.data.description,
+    sortOrder: parsed.data.sortOrder,
+  });
+
+  if (!result.ok) {
+    setupRedirect(projectId, { error: result.error });
+  }
+
+  setupRedirect(projectId, { ok: result.message });
+}
+
+async function persistSetupEntityUpdate(
+  projectId: string,
+  entityId: string,
+  entity: SetupEntity,
+  values: {
+    name: string;
+    description: string | null;
+    sortOrder: number;
+  },
+): Promise<SaveSetupEntityResult> {
   const table = entity === "zone" ? "zones" : "trades";
+  const label = entity === "zone" ? "Zone" : "Trade";
+  const { supabase } = await requireUser();
   const { data, error } = await supabase
     .from(table)
     .update({
-      name: parsed.data.name,
-      description: parsed.data.description,
-      sort_order: parsed.data.sortOrder,
+      name: values.name,
+      description: values.description,
+      sort_order: values.sortOrder,
     })
     .eq("id", entityId)
     .eq("project_id", projectId)
-    .select("id");
+    .select("id, updated_at");
 
   if (error) {
-    setupRedirect(projectId, { error: friendlyMutationError(entity, error.message) });
+    return { ok: false, error: friendlyMutationError(entity, error.message) };
   }
   if (!data || data.length === 0) {
-    setupRedirect(projectId, { error: `You do not have permission to update this ${entity}.` });
+    return { ok: false, error: `You do not have permission to update this ${entity}.` };
   }
 
   revalidatePath(`/projects/${projectId}/setup`);
-  setupRedirect(projectId, { ok: `${entity === "zone" ? "Zone" : "Trade"} updated.` });
+  return {
+    ok: true,
+    savedAt: data[0]?.updated_at ?? new Date().toISOString(),
+    message: `${label} saved.`,
+  };
+}
+
+async function saveSetupEntity(
+  input: SaveSetupEntityInput,
+  entity: SetupEntity,
+): Promise<SaveSetupEntityResult> {
+  const projectId = uuidSchema.safeParse(input.projectId);
+  if (!projectId.success) {
+    return { ok: false, error: "Invalid project." };
+  }
+  const entityId = uuidSchema.safeParse(input.entityId);
+  if (!entityId.success) {
+    return { ok: false, error: `Invalid ${entity}.` };
+  }
+
+  const parsed = zoneTradeFormSchema.safeParse({
+    name: input.name,
+    description: input.description,
+    sortOrder: input.sortOrder,
+  });
+
+  if (!parsed.success) {
+    return { ok: false, error: firstValidationMessage(parsed) };
+  }
+
+  return persistSetupEntityUpdate(projectId.data, entityId.data, entity, {
+    name: parsed.data.name,
+    description: parsed.data.description,
+    sortOrder: parsed.data.sortOrder,
+  });
 }
 
 async function deleteSetupEntity(formData: FormData, entity: SetupEntity): Promise<void> {
@@ -143,6 +219,10 @@ export async function updateZone(formData: FormData): Promise<void> {
   await updateSetupEntity(formData, "zone");
 }
 
+export async function saveZone(input: SaveSetupEntityInput): Promise<SaveSetupEntityResult> {
+  return saveSetupEntity(input, "zone");
+}
+
 export async function deleteZone(formData: FormData): Promise<void> {
   await deleteSetupEntity(formData, "zone");
 }
@@ -153,6 +233,10 @@ export async function createTrade(formData: FormData): Promise<void> {
 
 export async function updateTrade(formData: FormData): Promise<void> {
   await updateSetupEntity(formData, "trade");
+}
+
+export async function saveTrade(input: SaveSetupEntityInput): Promise<SaveSetupEntityResult> {
+  return saveSetupEntity(input, "trade");
 }
 
 export async function deleteTrade(formData: FormData): Promise<void> {

@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+import { groupDocumentUploads, type UploadDocumentRecord } from "@reforma/core";
+
 import { loadProjectAccess } from "../../../../lib/project-access";
 import { PROJECT_DOCUMENTS_BUCKET } from "../../../../lib/storage";
 import { DocumentMetadataForm } from "./document-metadata-form";
@@ -23,6 +25,10 @@ function formatDateTime(value: string): string {
   }).format(new Date(value));
 }
 
+interface DocumentFile extends UploadDocumentRecord {
+  signedUrl: string | null;
+}
+
 export default async function DocumentsPage({ params, searchParams }: DocumentsPageProps) {
   const { projectId } = await params;
   const { error, ok } = await searchParams;
@@ -31,7 +37,7 @@ export default async function DocumentsPage({ params, searchParams }: DocumentsP
   const { data: documents } = await supabase
     .from("documents")
     .select(
-      "id, type, title, storage_path, original_filename, mime_type, size_bytes, notes, created_at, updated_at",
+      "id, type, title, upload_batch_id, upload_batch_title, storage_path, original_filename, mime_type, size_bytes, notes, created_at, updated_at",
     )
     .eq("project_id", project.id)
     .order("created_at", { ascending: false });
@@ -44,6 +50,21 @@ export default async function DocumentsPage({ params, searchParams }: DocumentsP
 
       return { ...document, signedUrl: data?.signedUrl ?? null };
     }),
+  );
+  const documentGroups = groupDocumentUploads<DocumentFile>(
+    documentsWithUrls.map((document) => ({
+      id: document.id,
+      type: document.type,
+      title: document.title,
+      uploadBatchId: document.upload_batch_id,
+      uploadBatchTitle: document.upload_batch_title,
+      originalFilename: document.original_filename,
+      mimeType: document.mime_type,
+      sizeBytes: Number(document.size_bytes),
+      notes: document.notes,
+      updatedAt: document.updated_at,
+      signedUrl: document.signedUrl,
+    })),
   );
 
   return (
@@ -73,33 +94,47 @@ export default async function DocumentsPage({ params, searchParams }: DocumentsP
 
       <section className="card">
         <h2>Document library</h2>
-        {documentsWithUrls.length === 0 ? (
+        {documentGroups.length === 0 ? (
           <p className="muted">No documents yet.</p>
         ) : (
           <ul className="stack-list">
-            {documentsWithUrls.map((document) => (
-              <li key={document.id} className="stack-item">
+            {documentGroups.map((documentGroup) => (
+              <li key={documentGroup.uploadBatchId} className="stack-item">
                 <div className="split-row">
                   <div>
-                    <strong>{document.title}</strong>
+                    <strong>{documentGroup.title}</strong>
                     <div className="muted">
-                      {document.type} | {document.original_filename} |{" "}
-                      {formatBytes(document.size_bytes)} | Last saved{" "}
-                      {formatDateTime(document.updated_at)}
+                      {documentGroup.type} | {documentGroup.documents.length}{" "}
+                      {documentGroup.documents.length === 1 ? "file" : "files"} |{" "}
+                      {formatBytes(documentGroup.totalBytes)} | Last saved{" "}
+                      {formatDateTime(documentGroup.updatedAt)}
                     </div>
                   </div>
-                  {document.signedUrl ? (
-                    <a href={document.signedUrl} target="_blank" rel="noreferrer">
-                      Open
-                    </a>
-                  ) : (
-                    <span className="muted">No link</span>
-                  )}
                 </div>
+
+                <ul className="document-file-list">
+                  {documentGroup.documents.map((file) => (
+                    <li key={file.id}>
+                      <div>
+                        <strong>{file.originalFilename}</strong>
+                        <div className="muted">
+                          {file.mimeType || "unknown type"} | {formatBytes(file.sizeBytes)}
+                        </div>
+                      </div>
+                      {file.signedUrl ? (
+                        <a href={file.signedUrl} target="_blank" rel="noreferrer">
+                          Open
+                        </a>
+                      ) : (
+                        <span className="muted">No link</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
 
                 <DocumentMetadataForm
                   projectId={project.id}
-                  document={document}
+                  documentGroup={documentGroup}
                   canEdit={canEdit}
                 />
               </li>

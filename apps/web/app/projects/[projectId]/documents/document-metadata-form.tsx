@@ -8,12 +8,12 @@ import { deleteDocument, saveDocumentMetadata } from "./actions";
 
 interface DocumentMetadataFormProps {
   projectId: string;
-  document: {
-    id: string;
+  documentGroup: {
+    uploadBatchId: string;
     type: DocumentType;
     title: string;
     notes: string | null;
-    updated_at: string;
+    updatedAt: string;
   };
   canEdit: boolean;
 }
@@ -39,19 +39,23 @@ function saveStateText(state: SaveState): string {
   return state.message ?? `Last saved ${formatSavedTime(state.savedAt)}`;
 }
 
-export function DocumentMetadataForm({ projectId, document, canEdit }: DocumentMetadataFormProps) {
+export function DocumentMetadataForm({
+  projectId,
+  documentGroup,
+  canEdit,
+}: DocumentMetadataFormProps) {
   const initialValues = {
-    type: document.type,
-    title: document.title,
-    notes: document.notes ?? "",
+    type: documentGroup.type,
+    title: documentGroup.title,
+    notes: documentGroup.notes ?? "",
   };
-  const [type, setType] = useState<DocumentType>(document.type);
-  const [title, setTitle] = useState(document.title);
-  const [notes, setNotes] = useState(document.notes ?? "");
+  const [type, setType] = useState<DocumentType>(documentGroup.type);
+  const [title, setTitle] = useState(documentGroup.title);
+  const [notes, setNotes] = useState(documentGroup.notes ?? "");
   const [savedValues, setSavedValues] = useState(initialValues);
   const [saveState, setSaveState] = useState<SaveState>({
     status: "saved",
-    savedAt: document.updated_at,
+    savedAt: documentGroup.updatedAt,
   });
   const isDirty =
     type !== savedValues.type || title !== savedValues.title || notes !== savedValues.notes;
@@ -75,7 +79,7 @@ export function DocumentMetadataForm({ projectId, document, canEdit }: DocumentM
           setSaveState((current) => ({ status: "saving", savedAt: current.savedAt }));
           const result = await saveDocumentMetadata({
             projectId,
-            documentId: document.id,
+            uploadBatchId: documentGroup.uploadBatchId,
             ...values,
           });
 
@@ -135,7 +139,7 @@ export function DocumentMetadataForm({ projectId, document, canEdit }: DocumentM
             className="metadata-save-button"
             disabled={!canEdit || saveState.status === "saving" || !isDirty}
           >
-            {saveState.status === "saving" ? "Saving..." : "Save document"}
+            {saveState.status === "saving" ? "Saving..." : "Save upload"}
           </button>
           <span
             className={`save-state ${visibleSaveState.status === "error" ? "error" : ""}`}
@@ -150,9 +154,9 @@ export function DocumentMetadataForm({ projectId, document, canEdit }: DocumentM
       {canEdit ? (
         <form action={deleteDocument}>
           <input type="hidden" name="projectId" value={projectId} />
-          <input type="hidden" name="documentId" value={document.id} />
+          <input type="hidden" name="uploadBatchId" value={documentGroup.uploadBatchId} />
           <button type="submit" className="danger">
-            Delete document
+            Delete upload
           </button>
         </form>
       ) : null}

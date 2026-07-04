@@ -158,6 +158,19 @@ export function DocumentUploadPanel({ projectId, canEdit }: DocumentUploadPanelP
       ) : null}
 
       <label className="field">
+        <span>Title for this upload</span>
+        <input
+          name="title"
+          required
+          maxLength={180}
+          placeholder={
+            files.length > 1 ? "Example: Kitchen quote package" : "Example: Kitchen quote"
+          }
+          disabled={!canEdit || uploadState.status === "uploading"}
+        />
+      </label>
+
+      <label className="field">
         <span>Type for selected files</span>
         <select
           name="type"
