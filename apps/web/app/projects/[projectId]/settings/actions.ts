@@ -100,7 +100,7 @@ export async function removeMember(formData: FormData): Promise<void> {
     settingsRedirect(projectId, { error: "Invalid member." });
   }
 
-  const { supabase } = await requireUser();
+  const { supabase, user } = await requireUser();
 
   // RLS: owner/admin may remove members; owner rows only by an owner.
   const { data, error } = await supabase
@@ -108,13 +108,27 @@ export async function removeMember(formData: FormData): Promise<void> {
     .delete()
     .eq("id", membershipParsed.data)
     .eq("project_id", projectId)
-    .select("id");
+    .select("id, user_id, role");
 
   if (error) {
     settingsRedirect(projectId, { error: error.message });
   }
   if (!data || data.length === 0) {
     settingsRedirect(projectId, { error: "You do not have permission to remove this member." });
+  }
+
+  const removed = data[0];
+  const { error: auditError } = await supabase.from("audit_log").insert({
+    project_id: projectId,
+    actor_user_id: user.id,
+    action: "member.removed",
+    entity_type: "project_member",
+    entity_id: membershipParsed.data,
+    metadata: { removed_user_id: removed?.user_id, role: removed?.role },
+  });
+
+  if (auditError) {
+    settingsRedirect(projectId, { error: auditError.message });
   }
 
   revalidatePath(`/projects/${projectId}`);

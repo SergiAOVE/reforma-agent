@@ -17,14 +17,14 @@ insert into auth.users (
 )
 values
   (
-    '00000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-000000000000',
+    '00000000-0000-4000-8000-000000000001', '00000000-0000-0000-0000-000000000000',
     'authenticated', 'authenticated', 'ana@example.com',
     extensions.crypt('password123', extensions.gen_salt('bf')), now(),
     '{"provider":"email","providers":["email"]}', '{"full_name":"Ana Example"}',
     now(), now(), '', '', '', ''
   ),
   (
-    '00000000-0000-4000-8000-000000000002', '00000000-0000-4000-8000-000000000000',
+    '00000000-0000-4000-8000-000000000002', '00000000-0000-0000-0000-000000000000',
     'authenticated', 'authenticated', 'luis@example.com',
     extensions.crypt('password123', extensions.gen_salt('bf')), now(),
     '{"provider":"email","providers":["email"]}', '{"full_name":"Luis Example"}',

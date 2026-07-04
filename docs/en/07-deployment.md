@@ -382,6 +382,9 @@ supabase db dump --linked --data-only --use-copy -f backups/data.sql
 
 Backup notes:
 
+- **Migrations are forward-only by design**: there are no down/revert scripts. To undo a bad
+  schema change, ship a new forward migration that reverses it, or restore from a backup taken
+  before the deployment. Take a dump before applying migrations to production.
 - Database dumps include database rows and Storage metadata, not necessarily the bytes stored in
   private Storage buckets. Export bucket objects separately when you need a fully portable backup.
 - Keep backups encrypted and outside the repository.

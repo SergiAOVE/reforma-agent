@@ -25,7 +25,10 @@ export async function signIn(formData: FormData): Promise<void> {
   const { data, error } = await supabase.auth.signInWithPassword(parsed.data);
 
   if (error) {
-    loginRedirect("signin", error.message);
+    // Generic message on purpose: echoing the provider error would reveal
+    // whether the email is registered. Details go to the server log only.
+    console.error("signIn failed:", error.message);
+    loginRedirect("signin", "Invalid email or password.");
   }
 
   await ensureProfile(supabase, data.user);
@@ -51,7 +54,10 @@ export async function signUp(formData: FormData): Promise<void> {
   });
 
   if (error) {
-    loginRedirect("signup", error.message);
+    // Generic message on purpose: "User already registered" and similar
+    // provider errors enable account enumeration.
+    console.error("signUp failed:", error.message);
+    loginRedirect("signup", "Unable to create the account. Try signing in, or use another email.");
   }
 
   // With email confirmation enabled there is no session yet: ask the user

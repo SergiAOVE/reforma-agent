@@ -247,7 +247,7 @@ export async function updateVisit(formData: FormData): Promise<void> {
 export async function setVisitStatus(formData: FormData): Promise<void> {
   const projectId = requireProjectId(formData);
   const visitId = requireVisitId(formData, projectId);
-  const { supabase } = await requireUser();
+  const { supabase, user } = await requireUser();
   const parsed = visitStatusTransitionSchema.safeParse({ status: formData.get("status") });
 
   if (!parsed.success) {
@@ -275,6 +275,25 @@ export async function setVisitStatus(formData: FormData): Promise<void> {
     visitRedirect(projectId, visitId, {
       error: "You do not have permission to change this visit.",
     });
+  }
+
+  const auditAction =
+    parsed.data.status === "published"
+      ? "visit.published"
+      : parsed.data.status === "draft"
+        ? "visit.unpublished"
+        : "visit.archived";
+  const { error: auditError } = await supabase.from("audit_log").insert({
+    project_id: projectId,
+    actor_user_id: user.id,
+    action: auditAction,
+    entity_type: "visit",
+    entity_id: visitId,
+    metadata: { status: parsed.data.status },
+  });
+
+  if (auditError) {
+    visitRedirect(projectId, visitId, { error: auditError.message });
   }
 
   revalidatePath(`/projects/${projectId}/visits`);
@@ -461,14 +480,9 @@ export async function deleteEvidence(formData: FormData): Promise<void> {
     visitRedirect(projectId, visitId, { error: "Evidence not found." });
   }
 
-  const { error: storageError } = await supabase.storage
-    .from(VISIT_EVIDENCE_BUCKET)
-    .remove([evidence.storage_path]);
-
-  if (storageError) {
-    visitRedirect(projectId, visitId, { error: storageError.message });
-  }
-
+  // Delete the DB row first: if the row deletion fails nothing is lost, and
+  // if the later storage removal fails we only leave an orphaned blob behind
+  // (harmless) instead of a row pointing at a deleted file.
   const { data, error } = await supabase
     .from("evidence")
     .delete()
@@ -484,6 +498,15 @@ export async function deleteEvidence(formData: FormData): Promise<void> {
     visitRedirect(projectId, visitId, {
       error: "You do not have permission to delete this evidence.",
     });
+  }
+
+  const { error: storageError } = await supabase.storage
+    .from(VISIT_EVIDENCE_BUCKET)
+    .remove([evidence.storage_path]);
+
+  if (storageError) {
+    // The evidence row is already gone; an orphaned blob is acceptable.
+    console.error("evidence blob cleanup failed:", evidence.storage_path, storageError.message);
   }
 
   revalidatePath(`/projects/${projectId}/visits`);

@@ -128,18 +128,9 @@ export default async function VisitPage({ params, searchParams }: VisitPageProps
   const { error, ok } = await searchParams;
   const { supabase, project, role, canEdit } = await loadProjectAccess(projectId);
 
-  const [
-    { data: visit },
-    { data: zones },
-    { data: trades },
-    { data: contractItems },
-    { data: evidence },
-    { data: transcriptions },
-    { data: transcriptionJobs },
-    { data: extractionJobs },
-    { data: issueDrafts },
-    { data: decisionDrafts },
-  ] = await Promise.all([
+  // Visit and evidence come first: the queries below are scoped to this
+  // visit's evidence ids instead of loading project-wide rows.
+  const [{ data: visit }, { data: evidence }] = await Promise.all([
     supabase
       .from("visits")
       .select(
@@ -148,13 +139,6 @@ export default async function VisitPage({ params, searchParams }: VisitPageProps
       .eq("id", visitId)
       .eq("project_id", project.id)
       .maybeSingle(),
-    supabase.from("zones").select("id, name").eq("project_id", project.id).order("name"),
-    supabase.from("trades").select("id, name").eq("project_id", project.id).order("name"),
-    supabase
-      .from("contract_items")
-      .select("id, code, title")
-      .eq("project_id", project.id)
-      .order("title"),
     supabase
       .from("evidence")
       .select(
@@ -163,24 +147,57 @@ export default async function VisitPage({ params, searchParams }: VisitPageProps
       .eq("project_id", project.id)
       .eq("visit_id", visitId)
       .order("created_at", { ascending: false }),
+  ]);
+
+  if (!visit) {
+    notFound();
+  }
+
+  const evidenceIds = (evidence ?? []).map((item) => item.id);
+  const emptyRows = Promise.resolve({ data: [] });
+
+  const [
+    { data: zones },
+    { data: trades },
+    { data: contractItems },
+    { data: transcriptions },
+    { data: transcriptionJobs },
+    { data: extractionJobs },
+    { data: issueDrafts },
+    { data: decisionDrafts },
+  ] = await Promise.all([
+    supabase.from("zones").select("id, name").eq("project_id", project.id).order("name"),
+    supabase.from("trades").select("id, name").eq("project_id", project.id).order("name"),
     supabase
-      .from("audio_transcriptions")
-      .select(
-        "id, evidence_id, raw_transcript, edited_transcript, language, provider, model, updated_at",
-      )
+      .from("contract_items")
+      .select("id, code, title")
       .eq("project_id", project.id)
-      .order("updated_at", { ascending: false }),
-    supabase
-      .from("agent_jobs")
-      .select("id, status, input, error_message, created_at, updated_at")
-      .eq("project_id", project.id)
-      .eq("type", "transcribe_audio")
-      .order("created_at", { ascending: false }),
+      .order("title"),
+    evidenceIds.length === 0
+      ? emptyRows
+      : supabase
+          .from("audio_transcriptions")
+          .select(
+            "id, evidence_id, raw_transcript, edited_transcript, language, provider, model, updated_at",
+          )
+          .eq("project_id", project.id)
+          .in("evidence_id", evidenceIds)
+          .order("updated_at", { ascending: false }),
+    evidenceIds.length === 0
+      ? emptyRows
+      : supabase
+          .from("agent_jobs")
+          .select("id, status, input, error_message, created_at, updated_at")
+          .eq("project_id", project.id)
+          .eq("type", "transcribe_audio")
+          .in("input->>evidenceId", evidenceIds)
+          .order("created_at", { ascending: false }),
     supabase
       .from("agent_jobs")
       .select("id, type, status, input, error_message, created_at, updated_at")
       .eq("project_id", project.id)
       .in("type", ["generate_visit_summary", "suggest_issues", "suggest_decisions"])
+      .eq("input->>visitId", visitId)
       .order("created_at", { ascending: false }),
     supabase
       .from("issues")
@@ -203,10 +220,6 @@ export default async function VisitPage({ params, searchParams }: VisitPageProps
       .in("review_state", ["ai_draft", "edited"])
       .order("created_at", { ascending: false }),
   ]);
-
-  if (!visit) {
-    notFound();
-  }
 
   const safeZones = zones ?? [];
   const safeTrades = trades ?? [];

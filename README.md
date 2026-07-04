@@ -1,6 +1,8 @@
 # reforma-agent
 
-Open source PWA for **intelligent home renovation tracking**.
+Open source web app for **intelligent home renovation tracking**, built mobile-first and on
+its way to being a full PWA (a web manifest ships already; icons, service worker and offline
+support are still pending).
 
 Someone periodically visits a renovation site to document progress and report it to owners who
 live abroad. The app records site visits, stores photos and audio as evidence, transcribes audio,

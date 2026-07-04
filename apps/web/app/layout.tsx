@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
@@ -9,6 +9,11 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "reforma-agent",
   description: "Intelligent home renovation tracking",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default async function RootLayout({ children }: { children: ReactNode }) {
