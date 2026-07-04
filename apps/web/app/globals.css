@@ -277,6 +277,83 @@ button.link {
   margin-top: 1rem;
 }
 
+.setup-tabs {
+  margin-top: 1rem;
+}
+
+.setup-tab-list {
+  margin-bottom: 0.75rem;
+}
+
+.setup-section {
+  margin-top: 0;
+}
+
+.setup-entity {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+button.setup-entity-summary {
+  display: grid;
+  width: 100%;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+
+button.setup-entity-summary:hover {
+  background: #f8f7f3;
+}
+
+button.setup-entity-summary > .save-state {
+  justify-self: end;
+  white-space: nowrap;
+}
+
+.setup-entity-main {
+  display: grid;
+  min-width: 0;
+  gap: 0.15rem;
+}
+
+.setup-entity-main .muted {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.setup-entity-toggle {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.15rem 0.55rem;
+  color: var(--accent);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.setup-entity-panel {
+  padding: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+
+.setup-entity-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 0.75rem;
+}
+
 .tab-list {
   display: flex;
   gap: 0.35rem;
@@ -297,6 +374,23 @@ button.link {
   color: var(--accent);
   border-color: var(--accent);
   background: #e8f2ec;
+}
+
+.tab-count {
+  display: inline-block;
+  min-width: 1.4rem;
+  margin-left: 0.35rem;
+  padding: 0.05rem 0.35rem;
+  border-radius: 999px;
+  background: #f0efeb;
+  color: var(--muted);
+  font-size: 0.75rem;
+  text-align: center;
+}
+
+.tab-button.active .tab-count {
+  background: var(--accent);
+  color: var(--accent-contrast);
 }
 
 .nav-card {
@@ -429,6 +523,22 @@ button.link {
   justify-content: space-between;
   gap: 1rem;
   flex-wrap: wrap;
+}
+
+@media (max-width: 720px) {
+  button.setup-entity-summary {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+  }
+
+  button.setup-entity-summary > .save-state,
+  .setup-entity-toggle {
+    justify-self: start;
+  }
+
+  button.setup-entity-summary > .save-state {
+    white-space: normal;
+  }
 }
 
 :focus-visible {

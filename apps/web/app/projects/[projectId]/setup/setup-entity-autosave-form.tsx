@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 
 import { deleteTrade, deleteZone, saveTrade, saveZone } from "./actions";
 
@@ -75,15 +75,19 @@ export function SetupEntityAutosaveForm({
     status: "saved",
     savedAt: item.updated_at,
   });
+  const [expanded, setExpanded] = useState(false);
   const latestFieldsRef = useRef(fields);
   const savedSnapshotRef = useRef(serializeFields(initialFields));
   const requestIdRef = useRef(0);
   const lastSavedAtRef = useRef(item.updated_at);
+  const panelId = useId();
   const label = entityLabel(entity);
   const saveAction = entity === "zone" ? saveZone : saveTrade;
   const deleteAction = entity === "zone" ? deleteZone : deleteTrade;
   const entityIdFieldName = entity === "zone" ? "zoneId" : "tradeId";
   const isDirty = serializeFields(fields) !== savedSnapshotRef.current;
+  const displayName = fields.name.trim() || `Untitled ${entity}`;
+  const descriptionPreview = fields.description.trim();
 
   useEffect(() => {
     latestFieldsRef.current = fields;
@@ -171,16 +175,78 @@ export function SetupEntityAutosaveForm({
   }, [canEdit, fields, saveCurrentFields]);
 
   return (
-    <div className="inline-edit">
-      <form
-        className="compact-form autosave-form"
-        onSubmit={(event) => {
-          event.preventDefault();
-          void saveCurrentFields();
-        }}
+    <div className="setup-entity">
+      <button
+        type="button"
+        className="setup-entity-summary"
+        aria-expanded={expanded}
+        aria-controls={panelId}
+        onClick={() => setExpanded((current) => !current)}
       >
-        <div className="form-status-row">
-          <strong>{label}</strong>
+        <span className="setup-entity-main">
+          <strong>{displayName}</strong>
+          <span className="muted">
+            {label} | Order {fields.sortOrder || "none"}
+            {descriptionPreview ? ` | ${descriptionPreview}` : ""}
+          </span>
+        </span>
+        <span className={`save-state ${saveState.status === "error" ? "error" : ""}`}>
+          {saveStateText(saveState)}
+        </span>
+        <span className="setup-entity-toggle">{expanded ? "Collapse" : "Edit"}</span>
+      </button>
+
+      <div id={panelId} className="setup-entity-panel" hidden={!expanded}>
+        <form
+          className="compact-form autosave-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void saveCurrentFields();
+          }}
+        >
+          <label className="field">
+            <span>Name</span>
+            <input
+              value={fields.name}
+              onChange={(event) => setField("name", event.target.value)}
+              required
+              maxLength={120}
+              disabled={!canEdit}
+            />
+          </label>
+          <label className="field">
+            <span>Description</span>
+            <textarea
+              value={fields.description}
+              onChange={(event) => setField("description", event.target.value)}
+              rows={2}
+              maxLength={2000}
+              disabled={!canEdit}
+            />
+          </label>
+          <label className="field">
+            <span>Sort order</span>
+            <input
+              value={fields.sortOrder}
+              onChange={(event) => setField("sortOrder", event.target.value)}
+              type="number"
+              min="0"
+              max="10000"
+              disabled={!canEdit}
+            />
+          </label>
+          <div className="button-row">
+            <button
+              type="submit"
+              className="secondary"
+              disabled={!canEdit || saveState.status === "saving" || !isDirty}
+            >
+              Save now
+            </button>
+          </div>
+        </form>
+
+        <div className="setup-entity-actions">
           <span
             className={`save-state ${saveState.status === "error" ? "error" : ""}`}
             role="status"
@@ -188,59 +254,17 @@ export function SetupEntityAutosaveForm({
           >
             {saveStateText(saveState)}
           </span>
+          {canEdit ? (
+            <form action={deleteAction}>
+              <input type="hidden" name="projectId" value={projectId} />
+              <input type="hidden" name={entityIdFieldName} value={item.id} />
+              <button type="submit" className="danger" aria-label={`Delete ${item.name}`}>
+                Delete {entity}
+              </button>
+            </form>
+          ) : null}
         </div>
-
-        <label className="field">
-          <span>Name</span>
-          <input
-            value={fields.name}
-            onChange={(event) => setField("name", event.target.value)}
-            required
-            maxLength={120}
-            disabled={!canEdit}
-          />
-        </label>
-        <label className="field">
-          <span>Description</span>
-          <textarea
-            value={fields.description}
-            onChange={(event) => setField("description", event.target.value)}
-            rows={2}
-            maxLength={2000}
-            disabled={!canEdit}
-          />
-        </label>
-        <label className="field">
-          <span>Sort order</span>
-          <input
-            value={fields.sortOrder}
-            onChange={(event) => setField("sortOrder", event.target.value)}
-            type="number"
-            min="0"
-            max="10000"
-            disabled={!canEdit}
-          />
-        </label>
-        <div className="button-row">
-          <button
-            type="submit"
-            className="secondary"
-            disabled={!canEdit || saveState.status === "saving" || !isDirty}
-          >
-            Save now
-          </button>
-        </div>
-      </form>
-
-      {canEdit ? (
-        <form action={deleteAction}>
-          <input type="hidden" name="projectId" value={projectId} />
-          <input type="hidden" name={entityIdFieldName} value={item.id} />
-          <button type="submit" className="danger" aria-label={`Delete ${item.name}`}>
-            Delete {entity}
-          </button>
-        </form>
-      ) : null}
+      </div>
     </div>
   );
 }

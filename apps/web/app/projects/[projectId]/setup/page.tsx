@@ -3,6 +3,7 @@ import Link from "next/link";
 import { loadProjectAccess } from "../../../../lib/project-access";
 import { createTrade, createZone } from "./actions";
 import { SetupEntityAutosaveForm } from "./setup-entity-autosave-form";
+import { SetupTabs } from "./setup-tabs";
 
 interface ProjectSetupPageProps {
   params: Promise<{ projectId: string }>;
@@ -56,93 +57,100 @@ export default async function ProjectSetupPage({ params, searchParams }: Project
         </p>
       ) : null}
 
-      <div className="grid two">
-        <section className="card">
-          <h2>Zones</h2>
-          <p className="muted">Rooms or areas, such as kitchen, hallway or main bathroom.</p>
-          <form action={createZone} className="compact-form">
-            <input type="hidden" name="projectId" value={project.id} />
-            <label className="field">
-              <span>Name</span>
-              <input name="name" required maxLength={120} disabled={!canEdit} />
-            </label>
-            <label className="field">
-              <span>Description</span>
-              <textarea name="description" rows={2} maxLength={2000} disabled={!canEdit} />
-            </label>
-            <label className="field">
-              <span>Sort order</span>
-              <input
-                name="sortOrder"
-                type="number"
-                min="0"
-                max="10000"
-                defaultValue="0"
-                disabled={!canEdit}
-              />
-            </label>
-            <button type="submit" disabled={!canEdit}>
-              Add zone
-            </button>
-          </form>
-
-          <ul className="stack-list">
-            {(zones ?? []).map((zone) => (
-              <li key={zone.id} className="stack-item">
-                <SetupEntityAutosaveForm
-                  projectId={project.id}
-                  entity="zone"
-                  item={zone}
-                  canEdit={canEdit}
+      <SetupTabs
+        zoneCount={(zones ?? []).length}
+        tradeCount={(trades ?? []).length}
+        zones={
+          <section className="card setup-section">
+            <h2>Zones</h2>
+            <p className="muted">Rooms or areas, such as kitchen, hallway or main bathroom.</p>
+            <form action={createZone} className="compact-form">
+              <input type="hidden" name="projectId" value={project.id} />
+              <label className="field">
+                <span>Name</span>
+                <input name="name" required maxLength={120} disabled={!canEdit} />
+              </label>
+              <label className="field">
+                <span>Description</span>
+                <textarea name="description" rows={2} maxLength={2000} disabled={!canEdit} />
+              </label>
+              <label className="field">
+                <span>Sort order</span>
+                <input
+                  name="sortOrder"
+                  type="number"
+                  min="0"
+                  max="10000"
+                  defaultValue="0"
+                  disabled={!canEdit}
                 />
-              </li>
-            ))}
-          </ul>
-        </section>
+              </label>
+              <button type="submit" disabled={!canEdit}>
+                Add zone
+              </button>
+            </form>
 
-        <section className="card">
-          <h2>Trades</h2>
-          <p className="muted">Crafts or disciplines, such as plumbing, electrical or carpentry.</p>
-          <form action={createTrade} className="compact-form">
-            <input type="hidden" name="projectId" value={project.id} />
-            <label className="field">
-              <span>Name</span>
-              <input name="name" required maxLength={120} disabled={!canEdit} />
-            </label>
-            <label className="field">
-              <span>Description</span>
-              <textarea name="description" rows={2} maxLength={2000} disabled={!canEdit} />
-            </label>
-            <label className="field">
-              <span>Sort order</span>
-              <input
-                name="sortOrder"
-                type="number"
-                min="0"
-                max="10000"
-                defaultValue="0"
-                disabled={!canEdit}
-              />
-            </label>
-            <button type="submit" disabled={!canEdit}>
-              Add trade
-            </button>
-          </form>
-
-          <ul className="stack-list">
-            {(trades ?? []).map((trade) => (
-              <li key={trade.id} className="stack-item">
-                <SetupEntityAutosaveForm
-                  projectId={project.id}
-                  entity="trade"
-                  item={trade}
-                  canEdit={canEdit}
+            <ul className="stack-list">
+              {(zones ?? []).map((zone) => (
+                <li key={zone.id} className="stack-item">
+                  <SetupEntityAutosaveForm
+                    projectId={project.id}
+                    entity="zone"
+                    item={zone}
+                    canEdit={canEdit}
+                  />
+                </li>
+              ))}
+            </ul>
+          </section>
+        }
+        trades={
+          <section className="card setup-section">
+            <h2>Trades</h2>
+            <p className="muted">
+              Crafts or disciplines, such as plumbing, electrical or carpentry.
+            </p>
+            <form action={createTrade} className="compact-form">
+              <input type="hidden" name="projectId" value={project.id} />
+              <label className="field">
+                <span>Name</span>
+                <input name="name" required maxLength={120} disabled={!canEdit} />
+              </label>
+              <label className="field">
+                <span>Description</span>
+                <textarea name="description" rows={2} maxLength={2000} disabled={!canEdit} />
+              </label>
+              <label className="field">
+                <span>Sort order</span>
+                <input
+                  name="sortOrder"
+                  type="number"
+                  min="0"
+                  max="10000"
+                  defaultValue="0"
+                  disabled={!canEdit}
                 />
-              </li>
-            ))}
-          </ul>
-        </section>
-      </div>
+              </label>
+              <button type="submit" disabled={!canEdit}>
+                Add trade
+              </button>
+            </form>
+
+            <ul className="stack-list">
+              {(trades ?? []).map((trade) => (
+                <li key={trade.id} className="stack-item">
+                  <SetupEntityAutosaveForm
+                    projectId={project.id}
+                    entity="trade"
+                    item={trade}
+                    canEdit={canEdit}
+                  />
+                </li>
+              ))}
+            </ul>
+          </section>
+        }
+      />
     </>
   );
 }
