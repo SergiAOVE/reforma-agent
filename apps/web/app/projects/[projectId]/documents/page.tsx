@@ -1,10 +1,9 @@
 import Link from "next/link";
 
-import { DOCUMENT_TYPES } from "@reforma/core";
-
 import { loadProjectAccess } from "../../../../lib/project-access";
 import { PROJECT_DOCUMENTS_BUCKET } from "../../../../lib/storage";
-import { deleteDocument, updateDocument, uploadDocument } from "./actions";
+import { DocumentMetadataForm } from "./document-metadata-form";
+import { DocumentUploadPanel } from "./document-upload-panel";
 
 interface DocumentsPageProps {
   params: Promise<{ projectId: string }>;
@@ -17,6 +16,13 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function formatDateTime(value: string): string {
+  return new Intl.DateTimeFormat("en", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
+}
+
 export default async function DocumentsPage({ params, searchParams }: DocumentsPageProps) {
   const { projectId } = await params;
   const { error, ok } = await searchParams;
@@ -25,7 +31,7 @@ export default async function DocumentsPage({ params, searchParams }: DocumentsP
   const { data: documents } = await supabase
     .from("documents")
     .select(
-      "id, type, title, storage_path, original_filename, mime_type, size_bytes, notes, created_at",
+      "id, type, title, storage_path, original_filename, mime_type, size_bytes, notes, created_at, updated_at",
     )
     .eq("project_id", project.id)
     .order("created_at", { ascending: false });
@@ -62,41 +68,7 @@ export default async function DocumentsPage({ params, searchParams }: DocumentsP
       ) : null}
 
       <section className="card">
-        <h2>Upload document</h2>
-        <form action={uploadDocument} encType="multipart/form-data" className="compact-form">
-          <input type="hidden" name="projectId" value={project.id} />
-          <label className="field">
-            <span>File</span>
-            <input
-              name="file"
-              type="file"
-              accept=".pdf,.jpg,.jpeg,.png,.webp,.txt,.csv,.doc,.docx,.xls,.xlsx"
-              required
-              disabled={!canEdit}
-            />
-          </label>
-          <label className="field">
-            <span>Type</span>
-            <select name="type" defaultValue="other" disabled={!canEdit}>
-              {DOCUMENT_TYPES.map((type) => (
-                <option key={type} value={type}>
-                  {type}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="field">
-            <span>Title</span>
-            <input name="title" required maxLength={180} disabled={!canEdit} />
-          </label>
-          <label className="field">
-            <span>Notes</span>
-            <textarea name="notes" rows={3} maxLength={2000} disabled={!canEdit} />
-          </label>
-          <button type="submit" disabled={!canEdit}>
-            Upload
-          </button>
-        </form>
+        <DocumentUploadPanel projectId={project.id} canEdit={canEdit} />
       </section>
 
       <section className="card">
@@ -111,8 +83,9 @@ export default async function DocumentsPage({ params, searchParams }: DocumentsP
                   <div>
                     <strong>{document.title}</strong>
                     <div className="muted">
-                      {document.type} · {document.original_filename} ·{" "}
-                      {formatBytes(document.size_bytes)}
+                      {document.type} | {document.original_filename} |{" "}
+                      {formatBytes(document.size_bytes)} | Last saved{" "}
+                      {formatDateTime(document.updated_at)}
                     </div>
                   </div>
                   {document.signedUrl ? (
@@ -124,49 +97,11 @@ export default async function DocumentsPage({ params, searchParams }: DocumentsP
                   )}
                 </div>
 
-                <form action={updateDocument} className="inline-edit">
-                  <input type="hidden" name="projectId" value={project.id} />
-                  <input type="hidden" name="documentId" value={document.id} />
-                  <label className="field">
-                    <span>Type</span>
-                    <select name="type" defaultValue={document.type} disabled={!canEdit}>
-                      {DOCUMENT_TYPES.map((type) => (
-                        <option key={type} value={type}>
-                          {type}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="field">
-                    <span>Title</span>
-                    <input
-                      name="title"
-                      defaultValue={document.title}
-                      required
-                      maxLength={180}
-                      disabled={!canEdit}
-                    />
-                  </label>
-                  <label className="field">
-                    <span>Notes</span>
-                    <textarea
-                      name="notes"
-                      defaultValue={document.notes ?? ""}
-                      rows={2}
-                      disabled={!canEdit}
-                    />
-                  </label>
-                  <div className="button-row">
-                    <button type="submit" disabled={!canEdit}>
-                      Save
-                    </button>
-                    {canEdit ? (
-                      <button type="submit" formAction={deleteDocument} className="danger">
-                        Delete
-                      </button>
-                    ) : null}
-                  </div>
-                </form>
+                <DocumentMetadataForm
+                  projectId={project.id}
+                  document={document}
+                  canEdit={canEdit}
+                />
               </li>
             ))}
           </ul>
