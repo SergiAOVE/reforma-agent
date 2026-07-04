@@ -70,6 +70,8 @@ function toContractItemInsert(
   };
 }
 
+export type SaveContractItemResult = { ok: true; savedAt: string } | { ok: false; error: string };
+
 export async function createContractItem(formData: FormData): Promise<void> {
   const projectId = requireProjectId(formData);
   const { supabase } = await requireUser();
@@ -121,6 +123,55 @@ export async function updateContractItem(formData: FormData): Promise<void> {
 
   revalidatePath(`/projects/${projectId}/budget`);
   budgetRedirect(projectId, { ok: "Budget item updated." });
+}
+
+export async function saveContractItem(input: {
+  projectId: string;
+  contractItemId: string;
+  code: string;
+  title: string;
+  description: string;
+  tradeId: string;
+  zoneId: string;
+  sourceDocumentId: string;
+  quantity: string;
+  unit: string;
+  unitPrice: string;
+  totalAmount: string;
+  includedExcluded: string;
+  sourcePage: string;
+  notes: string;
+}): Promise<SaveContractItemResult> {
+  const projectId = uuidSchema.safeParse(input.projectId);
+  if (!projectId.success) return { ok: false, error: "Invalid project." };
+
+  const contractItemId = uuidSchema.safeParse(input.contractItemId);
+  if (!contractItemId.success) return { ok: false, error: "Invalid budget line item." };
+
+  const { supabase } = await requireUser();
+  const parsed = contractItemFormSchema.safeParse(input);
+
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
+  }
+
+  const { data, error } = await supabase
+    .from("contract_items")
+    .update(toContractItemInsert(projectId.data, parsed.data))
+    .eq("id", contractItemId.data)
+    .eq("project_id", projectId.data)
+    .select("id, updated_at");
+
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+  const saved = data?.[0];
+  if (!saved) {
+    return { ok: false, error: "You do not have permission to update this budget item." };
+  }
+
+  revalidatePath(`/projects/${projectId.data}/budget`);
+  return { ok: true, savedAt: saved.updated_at };
 }
 
 export async function deleteContractItem(formData: FormData): Promise<void> {

@@ -354,6 +354,71 @@ button.setup-entity-summary > .save-state {
   margin-top: 0.75rem;
 }
 
+.budget-item {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+button.budget-item-summary {
+  display: grid;
+  width: 100%;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+
+button.budget-item-summary:hover {
+  background: #f8f7f3;
+}
+
+button.budget-item-summary > .save-state {
+  justify-self: end;
+  white-space: nowrap;
+}
+
+.budget-item-main {
+  display: grid;
+  min-width: 0;
+  gap: 0.15rem;
+}
+
+.budget-item-main .muted {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.budget-item-toggle {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.15rem 0.55rem;
+  color: var(--accent);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.budget-item-panel {
+  padding: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+
+.budget-item-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 0.75rem;
+}
+
 .tab-list {
   display: flex;
   gap: 0.35rem;
@@ -526,17 +591,22 @@ button.setup-entity-summary > .save-state {
 }
 
 @media (max-width: 720px) {
-  button.setup-entity-summary {
+  button.setup-entity-summary,
+  button.budget-item-summary {
     grid-template-columns: minmax(0, 1fr);
     align-items: start;
   }
 
   button.setup-entity-summary > .save-state,
-  .setup-entity-toggle {
+  button.budget-item-summary > .save-state,
+  .setup-entity-toggle,
+  .budget-item-toggle,
+  button.budget-item-summary > .badge {
     justify-self: start;
   }
 
-  button.setup-entity-summary > .save-state {
+  button.setup-entity-summary > .save-state,
+  button.budget-item-summary > .save-state {
     white-space: normal;
   }
 }

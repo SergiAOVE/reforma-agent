@@ -1,12 +1,8 @@
 import Link from "next/link";
 
 import { loadProjectAccess } from "../../../../lib/project-access";
-import {
-  createContractItem,
-  deleteContractItem,
-  importContractItemsCsv,
-  updateContractItem,
-} from "./actions";
+import { createContractItem, importContractItemsCsv } from "./actions";
+import { BudgetItemAutosaveForm } from "./budget-item-autosave-form";
 
 interface BudgetPageProps {
   params: Promise<{ projectId: string }>;
@@ -87,7 +83,7 @@ export default async function BudgetPage({ params, searchParams }: BudgetPagePro
       supabase
         .from("contract_items")
         .select(
-          "id, source_document_id, code, title, description, trade_id, zone_id, quantity, unit, unit_price, total_amount, included_excluded, source_page, notes, zones(name), trades(name), documents(title)",
+          "id, source_document_id, code, title, description, trade_id, zone_id, quantity, unit, unit_price, total_amount, included_excluded, source_page, notes, updated_at, zones(name), trades(name), documents(title)",
         )
         .eq("project_id", project.id)
         .order("created_at", { ascending: false }),
@@ -230,129 +226,14 @@ export default async function BudgetPage({ params, searchParams }: BudgetPagePro
           <ul className="stack-list">
             {safeItems.map((item) => (
               <li key={item.id} className="stack-item">
-                <div className="split-row">
-                  <div>
-                    <strong>
-                      {item.code ? `${item.code} · ` : ""}
-                      {item.title}
-                    </strong>
-                    <div className="muted">
-                      {item.trades?.name ?? "No trade"} · {item.zones?.name ?? "No zone"} ·{" "}
-                      {item.documents?.title ?? "No source document"}
-                    </div>
-                  </div>
-                  <span className="badge">{money(item.total_amount)}</span>
-                </div>
-                <form action={updateContractItem} className="inline-edit">
-                  <input type="hidden" name="projectId" value={project.id} />
-                  <input type="hidden" name="contractItemId" value={item.id} />
-                  <div className="grid two">
-                    <label className="field">
-                      <span>Code</span>
-                      <input name="code" defaultValue={item.code ?? ""} disabled={!canEdit} />
-                    </label>
-                    <label className="field">
-                      <span>Title</span>
-                      <input name="title" defaultValue={item.title} required disabled={!canEdit} />
-                    </label>
-                  </div>
-                  <label className="field">
-                    <span>Description</span>
-                    <textarea
-                      name="description"
-                      defaultValue={item.description ?? ""}
-                      rows={2}
-                      disabled={!canEdit}
-                    />
-                  </label>
-                  <SelectReferences
-                    zones={safeZones}
-                    trades={safeTrades}
-                    documents={safeDocuments}
-                    defaults={{
-                      zoneId: item.zone_id,
-                      tradeId: item.trade_id,
-                      sourceDocumentId: item.source_document_id,
-                    }}
-                    disabled={!canEdit}
-                  />
-                  <div className="grid three">
-                    <label className="field">
-                      <span>Quantity</span>
-                      <input
-                        name="quantity"
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        defaultValue={item.quantity ?? ""}
-                        disabled={!canEdit}
-                      />
-                    </label>
-                    <label className="field">
-                      <span>Unit</span>
-                      <input name="unit" defaultValue={item.unit ?? ""} disabled={!canEdit} />
-                    </label>
-                    <label className="field">
-                      <span>Unit price</span>
-                      <input
-                        name="unitPrice"
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        defaultValue={item.unit_price ?? ""}
-                        disabled={!canEdit}
-                      />
-                    </label>
-                  </div>
-                  <div className="grid three">
-                    <label className="field">
-                      <span>Total amount</span>
-                      <input
-                        name="totalAmount"
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        defaultValue={item.total_amount ?? ""}
-                        disabled={!canEdit}
-                      />
-                    </label>
-                    <label className="field">
-                      <span>Included/excluded</span>
-                      <input
-                        name="includedExcluded"
-                        defaultValue={item.included_excluded ?? ""}
-                        disabled={!canEdit}
-                      />
-                    </label>
-                    <label className="field">
-                      <span>Source page</span>
-                      <input
-                        name="sourcePage"
-                        defaultValue={item.source_page ?? ""}
-                        disabled={!canEdit}
-                      />
-                    </label>
-                  </div>
-                  <label className="field">
-                    <span>Notes</span>
-                    <textarea
-                      name="notes"
-                      defaultValue={item.notes ?? ""}
-                      rows={2}
-                      disabled={!canEdit}
-                    />
-                  </label>
-                  <div className="button-row">
-                    <button type="submit" disabled={!canEdit}>
-                      Save
-                    </button>
-                    {canEdit ? (
-                      <button type="submit" formAction={deleteContractItem} className="danger">
-                        Delete
-                      </button>
-                    ) : null}
-                  </div>
-                </form>
+                <BudgetItemAutosaveForm
+                  projectId={project.id}
+                  item={item}
+                  zones={safeZones}
+                  trades={safeTrades}
+                  documents={safeDocuments}
+                  canEdit={canEdit}
+                />
               </li>
             ))}
           </ul>
