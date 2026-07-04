@@ -111,6 +111,23 @@ const weeklyContext = {
   documents: visitContext.documents,
 };
 
+const documentContext = {
+  project: visitContext.project,
+  document: {
+    id: "77777777-7777-4777-8777-777777777777",
+    type: "quote",
+    title: "Builder quote",
+    notes: "Includes kitchen cabinets and excludes lighting.",
+    originalFilename: "builder-quote.txt",
+    mimeType: "text/plain",
+  },
+  extractedText:
+    "Kitchen cabinets are included. Lighting points are excluded and must be confirmed separately.",
+  zones: visitContext.zones,
+  trades: visitContext.trades,
+  contractItems: visitContext.contractItems,
+};
+
 describe("MockAiProvider", () => {
   it("returns a deterministic local transcript", async () => {
     const provider = new MockAiProvider();
@@ -176,6 +193,18 @@ describe("MockAiProvider", () => {
       tradeId: "55555555-5555-4555-8555-555555555555",
     });
     expect(result.decisions[0]?.options).toHaveLength(2);
+  });
+
+  it("returns a deterministic document insight draft", async () => {
+    const provider = new MockAiProvider();
+    const result = await provider.analyzeDocument({ context: documentContext });
+
+    expect(result.provider).toBe("mock");
+    expect(result.model).toBe("mock-text-extractor");
+    expect(result.title).toBe("Document insight: Builder quote");
+    expect(result.summary).toContain("Kitchen cabinets are included");
+    expect(result.keyPoints).toEqual(["Review text from builder-quote.txt."]);
+    expect(result.suggestedActions).toEqual(["Review this AI draft before relying on it."]);
   });
 });
 

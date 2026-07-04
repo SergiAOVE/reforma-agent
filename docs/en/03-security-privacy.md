@@ -37,6 +37,7 @@ and [20260703175220_phase4_visit_evidence_storage.sql](../../supabase/migrations
 and [20260703182114_phase5_worker_job_claiming.sql](../../supabase/migrations/20260703182114_phase5_worker_job_claiming.sql)
 and [20260703190634_phase7_summary_review_metadata.sql](../../supabase/migrations/20260703190634_phase7_summary_review_metadata.sql)
 and [20260703193548_phase8_weekly_summaries.sql](../../supabase/migrations/20260703193548_phase8_weekly_summaries.sql)
+and [20260704073241_phase12_document_intelligence.sql](../../supabase/migrations/20260704073241_phase12_document_intelligence.sql)
 (every policy is commented in the SQL). Summary:
 
 **Helper functions** — `SECURITY DEFINER`, `STABLE`, pinned `search_path`, execute revoked from
@@ -73,6 +74,7 @@ without recursing into their own policy:
 | `zones`, `trades`, `documents`, `contract_items`, `visits`, `evidence`, `issues`, `decisions` | member           | owner/admin/editor        | owner/admin/editor | owner/admin/editor             |
 | `audio_transcriptions`                                                                        | member           | — (worker only)           | editors            | — (raw transcript preserved)   |
 | `weekly_summaries`                                                                            | member           | — (worker only)           | editors            | — (review history preserved)   |
+| `document_insights`                                                                           | member           | — (worker only)           | editors            | — (review history preserved)   |
 | `agent_jobs`                                                                                  | member           | editors (self as creator) | — (worker only)    | — (worker only)                |
 | `audit_log`                                                                                   | member           | member, about self        | —                  | — (append-only)                |
 
@@ -176,6 +178,9 @@ worker polling or automatic issue/decision extraction.
 - Weekly summary generation also stays text-only. Its context is limited to visits, reviewed
   summaries, approved/open issue text, pending/approved decision text, zones/trades, budget
   metadata and document metadata. It never downloads files or inspects photo/document bytes.
+- Document intelligence is optional and worker-only. It downloads only project documents from the
+  private `project-documents` bucket and accepts only text-like MIME types. It rejects images,
+  photos, PDFs, Office binaries and other non-text files without retry.
 
 Phases 6–8 do not implement OCR, AI vision, photo analysis, Telegram or NanoClaw.
 
@@ -247,6 +252,24 @@ document intelligence, OCR, image analysis or upload path.
 - Review actions write `audit_log` entries. The service role key remains worker-only and is not
   read by `apps/web`.
 
+## Document intelligence security (Phase 12)
+
+- The `analyze_document` job type is claimed only by `apps/worker` through the existing
+  service-role-only `claim_agent_job()` RPC.
+- The worker validates `agent_jobs.input = { "documentId": "uuid" }`, confirms the document
+  belongs to the same project and downloads only from the private `project-documents` bucket.
+- Phase 12 accepts only text-like documents (`text/*`). It does not OCR PDFs, parse Office files,
+  analyze image documents or inspect photos.
+- `document_insights` explicitly revokes default table grants, then grants `authenticated`
+  select/update and `service_role` full access, with RLS enabled. There is no anon access and no
+  authenticated insert or delete policy.
+- The worker inserts document insight drafts with `source = 'ai'`, `review_state = 'ai_draft'`
+  and `created_by_job_id` pointing back to the job for provenance.
+- Owner/admin/editor roles can update/review document insights through normal RLS-scoped future
+  actions; viewers are read-only.
+- `apps/web` does not run document intelligence in a request and does not read the service role
+  key.
+
 ## Open source deployment model
 
 Each user deploys their own instance and configures their own Supabase project. There is no
@@ -254,9 +277,10 @@ central multi-tenant service: each renovation's data stays under the control of 
 
 ## Status
 
-Phases 1–11 done: schema + RLS in migrations, auth and membership management live in the web app,
+Phases 1–12 done: schema + RLS in migrations, auth and membership management live in the web app,
 private project document Storage and private visit evidence Storage are implemented, the
 service-role worker can transcribe audio evidence and generate reviewable text drafts through
 `agent_jobs`, project members can review AI drafts and weekly summaries with audit logging, and
 the optional Telegram and NanoClaw gateways are constrained to first-party server APIs with no
-direct Supabase writes.
+direct Supabase writes. Optional document intelligence now generates reviewable drafts from
+text-like project documents only.

@@ -1,5 +1,14 @@
-import type { AiProvider, VisitTextContext, WeeklySummaryContext } from "@reforma/ai";
+import type {
+  AiProvider,
+  DocumentIntelligenceContext,
+  VisitTextContext,
+  WeeklySummaryContext,
+} from "@reforma/ai";
 import {
+  analyzeDocumentJobInputSchema,
+  analyzeDocumentJobOutputSchema,
+  documentInsightResultSchema,
+  isSupportedDocumentIntelligenceMimeType,
   suggestDecisionsJobOutputSchema,
   suggestDecisionsResultSchema,
   suggestIssuesJobOutputSchema,
@@ -21,13 +30,16 @@ import type { Database, Json, SupabaseClient, Tables } from "@reforma/db";
 
 import { log } from "./logger";
 
+const PROJECT_DOCUMENTS_BUCKET = "project-documents";
 const VISIT_EVIDENCE_BUCKET = "visit-evidence";
+const DOCUMENT_INTELLIGENCE_TEXT_LIMIT = 20_000;
 export const SUPPORTED_JOB_TYPES = [
   "transcribe_audio",
   "generate_visit_summary",
   "suggest_issues",
   "suggest_decisions",
   "generate_weekly_summary",
+  "analyze_document",
 ] as const;
 
 const OPEN_ISSUE_STATUSES = new Set(["open", "in_review", "waiting_builder", "waiting_owner"]);
@@ -40,9 +52,21 @@ type AgentJob = Tables<"agent_jobs">;
 type IssueInsert = Database["public"]["Tables"]["issues"]["Insert"];
 type DecisionInsert = Database["public"]["Tables"]["decisions"]["Insert"];
 type WeeklySummaryInsert = Database["public"]["Tables"]["weekly_summaries"]["Insert"];
+type DocumentInsightInsert = Database["public"]["Tables"]["document_insights"]["Insert"];
 type EvidenceRow = Pick<
   Tables<"evidence">,
   "id" | "project_id" | "type" | "storage_path" | "original_filename" | "mime_type"
+>;
+type DocumentIntelligenceDocumentRow = Pick<
+  Tables<"documents">,
+  | "id"
+  | "project_id"
+  | "type"
+  | "title"
+  | "notes"
+  | "storage_path"
+  | "original_filename"
+  | "mime_type"
 >;
 type AudioTranscriptionRow = Pick<
   Tables<"audio_transcriptions">,
@@ -200,6 +224,8 @@ async function processSupportedJob(
       return processSuggestDecisionsJob(supabase, provider, job);
     case "generate_weekly_summary":
       return processGenerateWeeklySummaryJob(supabase, provider, job);
+    case "analyze_document":
+      return processAnalyzeDocumentJob(supabase, provider, job);
     default:
       throw new PermanentJobError(`Unsupported job type: ${job.type}.`);
   }
@@ -428,6 +454,44 @@ async function processGenerateWeeklySummaryJob(
     projectId: job.project_id,
     weekStart: input.weekStart,
     weekEnd: input.weekEnd,
+    provider: result.provider,
+    model: result.model,
+  }) as Json;
+}
+
+async function processAnalyzeDocumentJob(
+  supabase: WorkerSupabaseClient,
+  provider: AiProvider,
+  job: AgentJob,
+): Promise<Json> {
+  const { context, input } = await loadDocumentIntelligenceContext(supabase, job);
+  const result = await provider.analyzeDocument({ context });
+  const parsed = documentInsightResultSchema.safeParse(result);
+
+  if (!parsed.success) {
+    throw new PermanentJobError(
+      parsed.error.issues[0]?.message ?? "Invalid document insight AI output.",
+    );
+  }
+
+  await deleteExistingJobDocumentInsight(supabase, job);
+  const documentInsightId = await insertDocumentInsightDraft(supabase, {
+    project_id: job.project_id,
+    document_id: input.documentId,
+    title: parsed.data.title,
+    summary: parsed.data.summary,
+    key_points: parsed.data.keyPoints as Json,
+    suggested_actions: parsed.data.suggestedActions as Json,
+    review_state: "ai_draft",
+    source: "ai",
+    created_by: job.created_by,
+    created_by_job_id: job.id,
+  });
+
+  return analyzeDocumentJobOutputSchema.parse({
+    documentInsightId,
+    documentId: input.documentId,
+    projectId: job.project_id,
     provider: result.provider,
     model: result.model,
   }) as Json;
@@ -860,6 +924,156 @@ async function loadWeeklySummaryContext(
   };
 }
 
+async function loadDocumentIntelligenceContext(
+  supabase: WorkerSupabaseClient,
+  job: AgentJob,
+): Promise<{ input: { documentId: string }; context: DocumentIntelligenceContext }> {
+  const parsed = analyzeDocumentJobInputSchema.safeParse(job.input);
+  if (!parsed.success) {
+    throw new PermanentJobError(
+      parsed.error.issues[0]?.message ?? "Invalid document intelligence job input.",
+    );
+  }
+
+  const input = parsed.data;
+  const { data: documentData, error: documentError } = await supabase
+    .from("documents")
+    .select("id, project_id, type, title, notes, storage_path, original_filename, mime_type")
+    .eq("id", input.documentId)
+    .eq("project_id", job.project_id)
+    .maybeSingle();
+
+  if (documentError) {
+    throw documentError;
+  }
+  if (!documentData) {
+    throw new PermanentJobError("Document not found for this project.");
+  }
+
+  const document = documentData as DocumentIntelligenceDocumentRow;
+  assertDocumentIntelligenceSupported(document.mime_type);
+
+  const { data: documentBlob, error: downloadError } = await supabase.storage
+    .from(PROJECT_DOCUMENTS_BUCKET)
+    .download(document.storage_path);
+
+  if (downloadError) {
+    throw downloadError;
+  }
+  if (!documentBlob) {
+    throw new Error("Storage download returned no document data.");
+  }
+
+  const extractedText = normalizeExtractedDocumentText(await documentBlob.text());
+  if (extractedText.length === 0) {
+    throw new PermanentJobError("Document intelligence requires non-empty text content.");
+  }
+
+  const [projectResult, zonesResult, tradesResult, contractItemsResult] = await Promise.all([
+    supabase
+      .from("projects")
+      .select("id, name, address_label")
+      .eq("id", job.project_id)
+      .maybeSingle(),
+    supabase
+      .from("zones")
+      .select("id, name, description")
+      .eq("project_id", job.project_id)
+      .order("sort_order"),
+    supabase
+      .from("trades")
+      .select("id, name, description")
+      .eq("project_id", job.project_id)
+      .order("sort_order"),
+    supabase
+      .from("contract_items")
+      .select("id, code, title, description, trade_id, zone_id, total_amount, status, notes")
+      .eq("project_id", job.project_id)
+      .order("created_at")
+      .limit(100),
+  ]);
+
+  if (projectResult.error) throw projectResult.error;
+  if (zonesResult.error) throw zonesResult.error;
+  if (tradesResult.error) throw tradesResult.error;
+  if (contractItemsResult.error) throw contractItemsResult.error;
+  if (!projectResult.data) {
+    throw new PermanentJobError("Project not found for document intelligence job.");
+  }
+
+  const project = projectResult.data as ProjectRow;
+  const zones = (zonesResult.data ?? []) as ZoneRow[];
+  const trades = (tradesResult.data ?? []) as TradeRow[];
+  const contractItems = (contractItemsResult.data ?? []) as ContractItemRow[];
+
+  return {
+    input,
+    context: {
+      project: {
+        id: project.id,
+        name: project.name,
+        addressLabel: project.address_label,
+      },
+      document: {
+        id: document.id,
+        type: document.type,
+        title: document.title,
+        notes: document.notes,
+        originalFilename: document.original_filename,
+        mimeType: document.mime_type,
+      },
+      extractedText,
+      zones: zones.map((zone) => ({
+        id: zone.id,
+        name: zone.name,
+        description: zone.description,
+      })),
+      trades: trades.map((trade) => ({
+        id: trade.id,
+        name: trade.name,
+        description: trade.description,
+      })),
+      contractItems: contractItems.map((item) => ({
+        id: item.id,
+        code: item.code,
+        title: item.title,
+        description: item.description,
+        tradeId: item.trade_id,
+        zoneId: item.zone_id,
+        totalAmount: item.total_amount,
+        status: item.status,
+        notes: item.notes,
+      })),
+    },
+  };
+}
+
+function assertDocumentIntelligenceSupported(mimeType: string): void {
+  if (mimeType.startsWith("image/")) {
+    throw new PermanentJobError("Document intelligence does not analyze images or photos.");
+  }
+
+  if (!isSupportedDocumentIntelligenceMimeType(mimeType)) {
+    throw new PermanentJobError(
+      "Phase 12 document intelligence only accepts text-like documents. PDF, Office and binary files require a later parser/OCR phase.",
+    );
+  }
+}
+
+function normalizeExtractedDocumentText(text: string): string {
+  const normalized = text
+    .replace(/\u0000/g, "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+  return normalized.length > DOCUMENT_INTELLIGENCE_TEXT_LIMIT
+    ? normalized.slice(0, DOCUMENT_INTELLIGENCE_TEXT_LIMIT)
+    : normalized;
+}
+
 function assertIssueReferences(context: VisitTextContext, issue: SuggestedIssue): void {
   const zoneIds = new Set(context.zones.map((zone) => zone.id));
   const tradeIds = new Set(context.trades.map((trade) => trade.id));
@@ -929,6 +1143,21 @@ async function deleteExistingJobWeeklySummary(
   }
 }
 
+async function deleteExistingJobDocumentInsight(
+  supabase: WorkerSupabaseClient,
+  job: AgentJob,
+): Promise<void> {
+  const { error } = await supabase
+    .from("document_insights")
+    .delete()
+    .eq("project_id", job.project_id)
+    .eq("created_by_job_id", job.id);
+
+  if (error) {
+    throw error;
+  }
+}
+
 async function insertIssueDrafts(
   supabase: WorkerSupabaseClient,
   rows: IssueInsert[],
@@ -960,6 +1189,23 @@ async function insertWeeklySummaryDraft(
   row: WeeklySummaryInsert,
 ): Promise<string> {
   const { data, error } = await supabase.from("weekly_summaries").insert(row).select("id").single();
+
+  if (error) {
+    throw error;
+  }
+
+  return data.id;
+}
+
+async function insertDocumentInsightDraft(
+  supabase: WorkerSupabaseClient,
+  row: DocumentInsightInsert,
+): Promise<string> {
+  const { data, error } = await supabase
+    .from("document_insights")
+    .insert(row)
+    .select("id")
+    .single();
 
   if (error) {
     throw error;

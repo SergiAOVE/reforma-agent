@@ -1,7 +1,8 @@
 # Deployment
 
-> Status: **Phase 9 documentation**. This guide documents how to deploy the
-> current MVP. It does not add product features.
+> Status: **implemented through Phase 12**. This guide documents how to deploy the
+> current MVP, including optional gateway and document-intelligence operations. It does not add
+> product features.
 
 ## Deployment model
 
@@ -243,6 +244,8 @@ Smoke test a deployed worker:
 3. Confirm `agent_jobs.status` moves from `pending` to `processing` to `completed`.
 4. Confirm the expected draft row appears and remains reviewable.
 5. Confirm failed jobs carry a safe `error_message` and retry only up to `max_attempts`.
+6. For document intelligence, confirm `analyze_document` jobs on text-like documents create
+   `document_insights` drafts and non-text/image files fail permanently without retry.
 
 ## Optional Telegram gateway
 
@@ -325,7 +328,8 @@ Verification checklist:
 - Members receive signed URLs generated server-side.
 - Uploads from the web app use the signed-in user's publishable-key session, not the service
   role.
-- Photos remain evidence only; no AI vision or OCR pipeline is enabled.
+- Photos remain evidence only; no AI vision or OCR pipeline is enabled. Phase 12 document
+  intelligence processes only text-like files from `project-documents`.
 
 ## RLS verification
 
@@ -340,7 +344,9 @@ Run these checks after production migrations and before inviting real users:
    claim work.
 7. `audio_transcriptions` and `weekly_summaries` are inserted by the worker/service role and
    reviewed by editors through normal RLS.
-8. Storage objects in both buckets are inaccessible without a valid project membership.
+8. `document_insights` are inserted by the worker/service role and readable/reviewable only
+   through project membership RLS.
+9. Storage objects in both buckets are inaccessible without a valid project membership.
 
 Useful SQL inspection queries from Supabase SQL Editor:
 
@@ -407,10 +413,11 @@ Before real renovation data enters the system:
 - The worker host has restart policy, log retention and alerting on crashes.
 - Optional Telegram/NanoClaw secrets are configured only when the gateway is used, and they are
   not browser-visible.
+- Optional document intelligence remains worker-only and text-only; no OCR/image/document parser
+  service is configured.
 - Supabase backups are enabled and a restore drill has been performed.
 - Production and preview environments do not accidentally share databases.
-- No OCR, image analysis or document intelligence service is configured as part of the MVP
-  deployment.
+- No OCR or image analysis service is configured as part of the MVP deployment.
 
 ## Rollback guidance
 

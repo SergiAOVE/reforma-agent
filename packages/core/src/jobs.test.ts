@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  analyzeDocumentJobInputSchema,
+  analyzeDocumentJobOutputSchema,
+  documentInsightResultSchema,
+  isSupportedDocumentIntelligenceMimeType,
   suggestDecisionsJobOutputSchema,
   suggestDecisionsResultSchema,
   suggestedDecisionSchema,
@@ -25,6 +29,8 @@ const issueId = "77777777-7777-4777-8777-777777777777";
 const decisionId = "88888888-8888-4888-8888-888888888888";
 const weeklySummaryId = "99999999-9999-4999-8999-999999999999";
 const projectId = "11111111-1111-4111-8111-111111111111";
+const documentId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const documentInsightId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 
 describe("transcribeAudioJobInputSchema", () => {
   it("accepts an evidence id and optional language", () => {
@@ -102,6 +108,16 @@ describe("weeklySummaryJobInputSchema", () => {
   });
 });
 
+describe("analyzeDocumentJobInputSchema", () => {
+  it("accepts a project document id", () => {
+    expect(analyzeDocumentJobInputSchema.parse({ documentId })).toEqual({ documentId });
+  });
+
+  it("rejects invalid document ids", () => {
+    expect(analyzeDocumentJobInputSchema.safeParse({ documentId: "bad" }).success).toBe(false);
+  });
+});
+
 describe("visitSummaryResultSchema", () => {
   it("accepts a non-empty summary", () => {
     expect(visitSummaryResultSchema.parse({ summary: "  Work progressed. " })).toEqual({
@@ -131,6 +147,50 @@ describe("weeklySummaryResultSchema", () => {
     expect(weeklySummaryResultSchema.safeParse({ title: "Week", summary: " " }).success).toBe(
       false,
     );
+  });
+});
+
+describe("documentInsightResultSchema", () => {
+  it("accepts reviewable document insight output", () => {
+    expect(
+      documentInsightResultSchema.parse({
+        title: "  Quote review ",
+        summary: "  The quote includes kitchen cabinets and excludes lighting. ",
+        keyPoints: ["  Kitchen cabinets included "],
+        suggestedActions: [" Confirm lighting scope "],
+      }),
+    ).toEqual({
+      title: "Quote review",
+      summary: "The quote includes kitchen cabinets and excludes lighting.",
+      keyPoints: ["Kitchen cabinets included"],
+      suggestedActions: ["Confirm lighting scope"],
+    });
+  });
+
+  it("rejects empty summaries", () => {
+    expect(
+      documentInsightResultSchema.safeParse({
+        title: "Quote",
+        summary: " ",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("limits key points and suggested actions", () => {
+    expect(
+      documentInsightResultSchema.safeParse({
+        title: "Quote",
+        summary: "Summary",
+        keyPoints: Array.from({ length: 21 }, (_, index) => `Point ${index}`),
+      }).success,
+    ).toBe(false);
+    expect(
+      documentInsightResultSchema.safeParse({
+        title: "Quote",
+        summary: "Summary",
+        suggestedActions: Array.from({ length: 11 }, (_, index) => `Action ${index}`),
+      }).success,
+    ).toBe(false);
   });
 });
 
@@ -239,5 +299,26 @@ describe("Phase 8 job output schemas", () => {
         model: "mock-text",
       }).success,
     ).toBe(true);
+  });
+});
+
+describe("Phase 12 document intelligence schemas", () => {
+  it("accepts created document insight metadata", () => {
+    expect(
+      analyzeDocumentJobOutputSchema.safeParse({
+        documentInsightId,
+        documentId,
+        projectId,
+        provider: "mock",
+        model: "mock-text",
+      }).success,
+    ).toBe(true);
+  });
+
+  it("allows text-like documents only", () => {
+    expect(isSupportedDocumentIntelligenceMimeType("text/plain")).toBe(true);
+    expect(isSupportedDocumentIntelligenceMimeType("text/csv")).toBe(true);
+    expect(isSupportedDocumentIntelligenceMimeType("image/png")).toBe(false);
+    expect(isSupportedDocumentIntelligenceMimeType("application/pdf")).toBe(false);
   });
 });

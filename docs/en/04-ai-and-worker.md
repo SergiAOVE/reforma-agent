@@ -17,6 +17,7 @@ The worker implements (Phase 5+):
 - Idempotent audio transcription through a unique `audio_transcriptions.evidence_id` index.
 - Text-only visit extraction for summaries, issue drafts and decision drafts.
 - Text-only weekly summary generation for owner review.
+- Optional text-only document intelligence for project documents.
 - Retries with `attempt_count`, `max_attempts` and `error_message`; permanent input errors fail
   without retry.
 - Clear logs without secrets.
@@ -31,6 +32,7 @@ The worker implements (Phase 5+):
 | `suggest_issues`          | Issue drafts                          | 6     |
 | `suggest_decisions`       | Pending decision drafts               | 6     |
 | `generate_weekly_summary` | Weekly summary for owners             | 8     |
+| `analyze_document`        | Document insight draft                | 12    |
 
 Phase 10 does not add worker job types. The optional Telegram gateway only forwards validated
 text-command intents to first-party server APIs; it does not enqueue AI work and does not run AI
@@ -45,6 +47,7 @@ validated text-command intents only, no worker enqueueing and no AI work inside 
 - Summarize visits from text (edited transcription + notes).
 - Propose issues and pending decisions from text.
 - Generate reviewable weekly summaries from project text.
+- Generate reviewable document insight drafts from text-like project documents.
 - Link an issue to a budget line item when there is a clear textual match.
 
 ## What AI can NOT do
@@ -54,6 +57,7 @@ validated text-command intents only, no worker enqueueing and no AI work inside 
 - Approve cost changes, send claims or modify contractual documents.
 - Delete evidence.
 - Make final decisions on behalf of the owners.
+- OCR PDFs, parse Office binaries or analyze image/photo documents in Phase 12.
 
 ## Human review
 
@@ -230,3 +234,58 @@ NanoClaw is not part of the AI pipeline. It cannot submit files for OCR, cannot 
 cannot create drafts directly, cannot enqueue worker jobs and cannot write to Supabase. Any future
 NanoClaw action that creates project data must call a first-party API that authenticates the app
 user, checks project membership and keeps all AI outputs reviewable.
+
+## Phase 12 document intelligence job contract
+
+`analyze_document` jobs use this input:
+
+```json
+{
+  "documentId": "uuid"
+}
+```
+
+Allowed inputs are deliberately narrow:
+
+- Document metadata (`documents.type`, title, notes, original filename and MIME type).
+- Text content extracted by reading the private Storage object as text.
+- Zone, trade and budget line item metadata for context.
+
+The worker downloads only from the private `project-documents` bucket using the service role key.
+It processes only text-like documents (`text/*`, for example `.txt` and `.csv`). It rejects
+images/photos, PDFs, Office binaries and other non-text MIME types as permanent job failures.
+There is no OCR, image analysis, document parser, document intelligence inside web requests or
+automatic issue/decision creation.
+
+The AI provider validates this shape:
+
+```json
+{
+  "title": "Document insight title",
+  "summary": "Reviewable document summary",
+  "keyPoints": ["reviewable point"],
+  "suggestedActions": ["human follow-up action"]
+}
+```
+
+The worker writes one `document_insights` row per completed job with:
+
+```json
+{
+  "source": "ai",
+  "review_state": "ai_draft",
+  "created_by_job_id": "agent job id"
+}
+```
+
+The completed job output stores the created row id and provider metadata:
+
+```json
+{
+  "documentInsightId": "uuid",
+  "documentId": "uuid",
+  "projectId": "uuid",
+  "provider": "mock | openai",
+  "model": "model name"
+}
+```

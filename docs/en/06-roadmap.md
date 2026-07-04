@@ -15,7 +15,7 @@ Phase 8 — Weekly summary. Done.
 Phase 9 — Deployment docs. Done.
 Phase 10 — Optional Telegram gateway. Done.
 Phase 11 — Optional NanoClaw gateway. Done.
-Phase 12 — Optional document intelligence.
+Phase 12 — Optional document intelligence. Done.
 ```
 
 ## Roadmap rules

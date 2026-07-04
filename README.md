@@ -55,13 +55,16 @@ More detail in [docs/en/05-local-development.md](docs/en/05-local-development.md
 guidance lives in [docs/en/07-deployment.md](docs/en/07-deployment.md). The optional Telegram
 gateway is documented in [docs/en/08-telegram-gateway.md](docs/en/08-telegram-gateway.md), and
 the optional NanoClaw gateway is documented in
-[docs/en/09-nanoclaw-gateway.md](docs/en/09-nanoclaw-gateway.md).
+[docs/en/09-nanoclaw-gateway.md](docs/en/09-nanoclaw-gateway.md). Optional document
+intelligence is documented in
+[docs/en/10-document-intelligence.md](docs/en/10-document-intelligence.md).
 
 ## Project status
 
-**Implemented through Phase 11**: MVP schema, auth, project setup, visits/evidence, worker jobs,
+**Implemented through Phase 12**: MVP schema, auth, project setup, visits/evidence, worker jobs,
 text-only AI drafts, review workflow, weekly summaries, deployment documentation and an optional
-Telegram/NanoClaw gateway contract. See [PLAN.md](PLAN.md) for the phased roadmap.
+Telegram/NanoClaw gateway contract plus optional text-only document intelligence. See
+[PLAN.md](PLAN.md) for the phased roadmap.
 
 ## Security and privacy
 
@@ -69,6 +72,7 @@ Telegram/NanoClaw gateway contract. See [PLAN.md](PLAN.md) for the phased roadma
 - Private storage; access via signed URLs.
 - The service role key is never exposed to the client.
 - Optional gateways call first-party server APIs; they do not write directly to Supabase.
+- Document intelligence runs only in the worker and does not analyze photos.
 - No real data in tests or seeds; synthetic data only.
 - Each user deploys their own instance with their own Supabase project.
 

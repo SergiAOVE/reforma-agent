@@ -17,9 +17,25 @@ A phase is only marked as completed if the checks (lint, typecheck, test, build)
 - [x] **Phase 9 — Deployment docs.**
 - [x] **Phase 10 — Optional: Telegram gateway.**
 - [x] **Phase 11 — Optional: NanoClaw gateway.**
-- [ ] **Phase 12 — Optional: document intelligence.**
+- [x] **Phase 12 — Optional: document intelligence.**
 
 ## Completed phases log
+
+### Phase 12 — 2026-07-04
+
+Optional document intelligence implemented as a worker-only, text-only feature. New migration
+`20260704073241_phase12_document_intelligence.sql` adds the `analyze_document` job type and
+`document_insights` with review metadata, worker-job provenance, explicit Data API grants and RLS
+policies: project members read, owner/admin/editor roles review/update, worker/service role
+inserts, no client delete. `packages/core` gained job input/output and provider result schemas
+plus a MIME helper that only accepts text-like documents. `packages/ai` gained
+`AiProvider.analyzeDocument()` with deterministic mock output and OpenAI structured JSON output
+using only extracted text and metadata. `apps/worker` now processes `analyze_document` through the
+existing polling/locking/retry flow, downloads only from the private `project-documents` bucket,
+rejects images/photos and non-text files as permanent failures, and stores `ai_draft` insights.
+No UI enqueue button, OCR, image analysis, PDF/Office parsing, gateway mutation, automatic
+issue/decision extraction or web-request AI work was added. Documentation now covers the feature
+in `docs/en/10-document-intelligence.md`.
 
 ### Phase 11 — 2026-07-03
 

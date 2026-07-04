@@ -94,6 +94,7 @@ describe("enum values mirror the SQL migration", () => {
       "suggest_issues",
       "suggest_decisions",
       "generate_weekly_summary",
+      "analyze_document",
     ]);
   });
 

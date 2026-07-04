@@ -75,6 +75,11 @@ export const weeklySummaryJobInputSchema = z
   });
 export type WeeklySummaryJobInput = z.infer<typeof weeklySummaryJobInputSchema>;
 
+export const analyzeDocumentJobInputSchema = z.object({
+  documentId: uuidSchema,
+});
+export type AnalyzeDocumentJobInput = z.infer<typeof analyzeDocumentJobInputSchema>;
+
 export const visitSummaryResultSchema = z.object({
   summary: z.string().trim().min(1).max(2000),
 });
@@ -85,6 +90,14 @@ export const weeklySummaryResultSchema = z.object({
   summary: z.string().trim().min(1).max(5000),
 });
 export type WeeklySummaryResult = z.infer<typeof weeklySummaryResultSchema>;
+
+export const documentInsightResultSchema = z.object({
+  title: z.string().trim().min(1).max(180),
+  summary: z.string().trim().min(1).max(5000),
+  keyPoints: z.array(z.string().trim().min(1).max(500)).max(20).default([]),
+  suggestedActions: z.array(z.string().trim().min(1).max(500)).max(10).default([]),
+});
+export type DocumentInsightResult = z.infer<typeof documentInsightResultSchema>;
 
 export const suggestedIssueSchema = z.object({
   title: aiDraftTitleSchema,
@@ -158,3 +171,14 @@ export const weeklySummaryJobOutputSchema = providerOutputSchema.extend({
   weekEnd: isoDateSchema,
 });
 export type WeeklySummaryJobOutput = z.infer<typeof weeklySummaryJobOutputSchema>;
+
+export const analyzeDocumentJobOutputSchema = providerOutputSchema.extend({
+  documentInsightId: uuidSchema,
+  documentId: uuidSchema,
+  projectId: uuidSchema,
+});
+export type AnalyzeDocumentJobOutput = z.infer<typeof analyzeDocumentJobOutputSchema>;
+
+export function isSupportedDocumentIntelligenceMimeType(mimeType: string): boolean {
+  return mimeType.startsWith("text/");
+}

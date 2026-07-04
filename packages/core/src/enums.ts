@@ -73,6 +73,7 @@ export const JOB_TYPES = [
   "suggest_issues",
   "suggest_decisions",
   "generate_weekly_summary",
+  "analyze_document",
 ] as const;
 export const jobTypeSchema = z.enum(JOB_TYPES);
 export type JobType = z.infer<typeof jobTypeSchema>;

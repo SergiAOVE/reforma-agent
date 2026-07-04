@@ -7,6 +7,7 @@
  */
 
 import type {
+  DocumentInsightResult,
   SuggestDecisionsResult,
   SuggestIssuesResult,
   VisitSummaryResult,
@@ -148,6 +149,44 @@ export interface WeeklySummaryContext {
   }[];
 }
 
+export interface DocumentIntelligenceContext {
+  project: {
+    id: string;
+    name: string;
+    addressLabel: string | null;
+  };
+  document: {
+    id: string;
+    type: string;
+    title: string;
+    notes: string | null;
+    originalFilename: string;
+    mimeType: string;
+  };
+  extractedText: string;
+  zones: {
+    id: string;
+    name: string;
+    description: string | null;
+  }[];
+  trades: {
+    id: string;
+    name: string;
+    description: string | null;
+  }[];
+  contractItems: {
+    id: string;
+    code: string | null;
+    title: string;
+    description: string | null;
+    tradeId: string | null;
+    zoneId: string | null;
+    totalAmount: number | null;
+    status: string;
+    notes: string | null;
+  }[];
+}
+
 export interface GenerateVisitSummaryInput {
   context: VisitTextContext;
 }
@@ -162,6 +201,10 @@ export interface SuggestIssuesInput {
 
 export interface SuggestDecisionsInput {
   context: VisitTextContext;
+}
+
+export interface AnalyzeDocumentInput {
+  context: DocumentIntelligenceContext;
 }
 
 export type GenerateVisitSummaryResult = VisitSummaryResult & {
@@ -184,6 +227,11 @@ export type SuggestDecisionsProviderResult = SuggestDecisionsResult & {
   model: string;
 };
 
+export type AnalyzeDocumentProviderResult = DocumentInsightResult & {
+  provider: string;
+  model: string;
+};
+
 export interface AiProvider {
   readonly name: string;
   transcribeAudio(input: TranscribeAudioInput): Promise<TranscribeAudioResult>;
@@ -191,6 +239,7 @@ export interface AiProvider {
   generateWeeklySummary(input: GenerateWeeklySummaryInput): Promise<GenerateWeeklySummaryResult>;
   suggestIssues(input: SuggestIssuesInput): Promise<SuggestIssuesProviderResult>;
   suggestDecisions(input: SuggestDecisionsInput): Promise<SuggestDecisionsProviderResult>;
+  analyzeDocument(input: AnalyzeDocumentInput): Promise<AnalyzeDocumentProviderResult>;
 }
 
 function compactText(value: string | null | undefined, maxLength = 500): string | null {
@@ -246,6 +295,25 @@ function weeklyContextText(context: WeeklySummaryContext): string {
     ]),
   ]
     .map((value) => compactText(value, 1000))
+    .filter((value): value is string => Boolean(value))
+    .join(" ");
+}
+
+function documentContextText(context: DocumentIntelligenceContext): string {
+  return [
+    context.document.type,
+    context.document.title,
+    context.document.notes,
+    context.document.originalFilename,
+    context.extractedText,
+    ...context.contractItems.flatMap((item) => [
+      item.code,
+      item.title,
+      item.description,
+      item.notes,
+    ]),
+  ]
+    .map((value) => compactText(value, 2000))
     .filter((value): value is string => Boolean(value))
     .join(" ");
 }
@@ -359,6 +427,22 @@ export class MockAiProvider implements AiProvider {
       model: this.textModel,
     };
   }
+
+  async analyzeDocument(input: AnalyzeDocumentInput): Promise<AnalyzeDocumentProviderResult> {
+    const text = compactText(documentContextText(input.context), 3000);
+    const title = `Document insight: ${input.context.document.title}`;
+
+    return {
+      title,
+      summary: text
+        ? `Draft document insight for "${input.context.document.title}": ${text}`
+        : `Draft document insight for "${input.context.document.title}". No text content was available.`,
+      keyPoints: text ? [`Review text from ${input.context.document.originalFilename}.`] : [],
+      suggestedActions: ["Review this AI draft before relying on it."],
+      provider: this.name,
+      model: this.textModel,
+    };
+  }
 }
 
 export interface OpenAiProviderOptions {
@@ -408,6 +492,26 @@ const weeklySummaryJsonSchema = {
   properties: {
     title: { type: "string", minLength: 1, maxLength: 180 },
     summary: { type: "string", minLength: 1, maxLength: 5000 },
+  },
+};
+
+const documentInsightJsonSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["title", "summary", "keyPoints", "suggestedActions"],
+  properties: {
+    title: { type: "string", minLength: 1, maxLength: 180 },
+    summary: { type: "string", minLength: 1, maxLength: 5000 },
+    keyPoints: {
+      type: "array",
+      maxItems: 20,
+      items: { type: "string", minLength: 1, maxLength: 500 },
+    },
+    suggestedActions: {
+      type: "array",
+      maxItems: 10,
+      items: { type: "string", minLength: 1, maxLength: 500 },
+    },
   },
 };
 
@@ -618,6 +722,21 @@ export class OpenAiProvider implements AiProvider {
     };
   }
 
+  async analyzeDocument(input: AnalyzeDocumentInput): Promise<AnalyzeDocumentProviderResult> {
+    const json = await this.requestStructuredJson(
+      "document_insight",
+      documentInsightJsonSchema,
+      "Create a reviewable renovation document insight using only the supplied text content and metadata. Do not infer from photos, OCR, images, binary files, or unstated facts. Avoid legal conclusions; suggest human review actions when needed.",
+      trimDocumentIntelligenceContext(input.context),
+    );
+
+    return {
+      ...(json as DocumentInsightResult),
+      provider: this.name,
+      model: this.textModel,
+    };
+  }
+
   private async requestStructuredJson(
     name: string,
     schema: Record<string, unknown>,
@@ -749,6 +868,26 @@ function trimWeeklySummaryContext(context: WeeklySummaryContext): WeeklySummaryC
     documents: context.documents.slice(0, 100).map((document) => ({
       ...document,
       notes: compactText(document.notes, 500),
+    })),
+  };
+}
+
+function trimDocumentIntelligenceContext(
+  context: DocumentIntelligenceContext,
+): DocumentIntelligenceContext {
+  return {
+    project: context.project,
+    document: {
+      ...context.document,
+      notes: compactText(context.document.notes, 1000),
+    },
+    extractedText: compactText(context.extractedText, 20000) ?? "",
+    zones: context.zones.slice(0, 100),
+    trades: context.trades.slice(0, 100),
+    contractItems: context.contractItems.slice(0, 100).map((item) => ({
+      ...item,
+      description: compactText(item.description, 500),
+      notes: compactText(item.notes, 500),
     })),
   };
 }

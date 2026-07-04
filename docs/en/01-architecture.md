@@ -21,8 +21,8 @@
   jobs inside a request; it only enqueues work into `agent_jobs`.
 - **Supabase**: source of truth. Auth, Postgres with RLS, private Storage.
 - **apps/worker**: processes `agent_jobs` asynchronously (transcription, textual extraction,
-  summaries) with locking, retries and idempotency. It uses the service role key, which never
-  reaches the browser.
+  summaries, text-only document intelligence) with locking, retries and idempotency. It uses the
+  service role key, which never reaches the browser.
 - **Optional gateways**: normalize third-party messages and call first-party server APIs. They do
   not write directly to Supabase and are not part of the core data path.
 

@@ -108,6 +108,12 @@ configured:
 WORKER_RUN_ONCE=true pnpm --filter @reforma/worker dev
 ```
 
+Phase 12 adds optional document intelligence through the `analyze_document` worker job type. It
+is text-only: the worker processes text-like files from the private `project-documents` bucket and
+writes reviewable `document_insights` drafts. It rejects images/photos, PDFs, Office binaries and
+other non-text files without retry. Phase 12 does not add a UI enqueue button; jobs can be created
+manually for smoke testing through SQL or a future RLS-scoped first-party action.
+
 Example budget CSV:
 
 ```csv
@@ -132,6 +138,8 @@ Migrations live in `supabase/migrations/` (enums → tables → RLS) and the see
 Production deployment guidance lives in [07-deployment.md](07-deployment.md). The optional
 Telegram gateway is documented in [08-telegram-gateway.md](08-telegram-gateway.md), and the
 optional NanoClaw gateway is documented in [09-nanoclaw-gateway.md](09-nanoclaw-gateway.md).
+Optional document intelligence is documented in
+[10-document-intelligence.md](10-document-intelligence.md).
 
 ## Conventions
 
