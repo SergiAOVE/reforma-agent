@@ -231,6 +231,13 @@ button.link {
   color: var(--danger);
 }
 
+.metadata-save-button:disabled {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  opacity: 0.75;
+}
+
 .button-row,
 .split-row {
   display: flex;
@@ -244,6 +251,26 @@ button.link {
   margin-top: 1rem;
   padding-top: 1rem;
   border-top: 1px solid var(--border);
+}
+
+.status-action-row {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.status-action {
+  border: 1px solid var(--border);
+}
+
+.status-action.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.status-action.active:disabled {
+  opacity: 1;
 }
 
 .visit-tabs {

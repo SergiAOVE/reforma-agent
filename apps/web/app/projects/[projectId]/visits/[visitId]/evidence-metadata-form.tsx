@@ -54,13 +54,29 @@ export function EvidenceMetadataForm({
   trades,
   canEdit,
 }: EvidenceMetadataFormProps) {
+  const initialValues = {
+    zoneId: evidence.zone_id ?? "",
+    tradeId: evidence.trade_id ?? "",
+    manualNote: evidence.manual_note ?? "",
+  };
   const [zoneId, setZoneId] = useState(evidence.zone_id ?? "");
   const [tradeId, setTradeId] = useState(evidence.trade_id ?? "");
   const [manualNote, setManualNote] = useState(evidence.manual_note ?? "");
+  const [savedValues, setSavedValues] = useState(initialValues);
   const [saveState, setSaveState] = useState<SaveState>({
     status: "saved",
     savedAt: evidence.updated_at,
   });
+  const isDirty =
+    zoneId !== savedValues.zoneId ||
+    tradeId !== savedValues.tradeId ||
+    manualNote !== savedValues.manualNote;
+  const visibleSaveState: SaveState =
+    saveState.status === "saving"
+      ? saveState
+      : isDirty
+        ? { status: "dirty", savedAt: saveState.savedAt }
+        : saveState;
 
   return (
     <div className="inline-edit">
@@ -68,7 +84,9 @@ export function EvidenceMetadataForm({
         className="compact-form"
         onSubmit={async (event) => {
           event.preventDefault();
-          if (!canEdit) return;
+          if (!canEdit || !isDirty) return;
+
+          const values = { zoneId, tradeId, manualNote };
 
           setSaveState((current) => ({ status: "saving", savedAt: current.savedAt }));
           const result = await saveEvidenceMetadata({
@@ -76,9 +94,7 @@ export function EvidenceMetadataForm({
             visitId,
             evidenceId: evidence.id,
             type: evidence.type,
-            zoneId,
-            tradeId,
-            manualNote,
+            ...values,
           });
 
           if (!result.ok) {
@@ -90,6 +106,7 @@ export function EvidenceMetadataForm({
             return;
           }
 
+          setSavedValues(values);
           setSaveState({
             status: "saved",
             savedAt: result.savedAt,
@@ -104,11 +121,6 @@ export function EvidenceMetadataForm({
               value={zoneId}
               onChange={(event) => {
                 setZoneId(event.target.value);
-                setSaveState((current) =>
-                  current.status === "saving"
-                    ? current
-                    : { status: "dirty", savedAt: current.savedAt },
-                );
               }}
               disabled={!canEdit || saveState.status === "saving"}
             >
@@ -126,11 +138,6 @@ export function EvidenceMetadataForm({
               value={tradeId}
               onChange={(event) => {
                 setTradeId(event.target.value);
-                setSaveState((current) =>
-                  current.status === "saving"
-                    ? current
-                    : { status: "dirty", savedAt: current.savedAt },
-                );
               }}
               disabled={!canEdit || saveState.status === "saving"}
             >
@@ -150,11 +157,6 @@ export function EvidenceMetadataForm({
             value={manualNote}
             onChange={(event) => {
               setManualNote(event.target.value);
-              setSaveState((current) =>
-                current.status === "saving"
-                  ? current
-                  : { status: "dirty", savedAt: current.savedAt },
-              );
             }}
             rows={2}
             disabled={!canEdit || saveState.status === "saving"}
@@ -162,15 +164,19 @@ export function EvidenceMetadataForm({
         </label>
 
         <div className="button-row">
-          <button type="submit" disabled={!canEdit || saveState.status === "saving"}>
+          <button
+            type="submit"
+            className="metadata-save-button"
+            disabled={!canEdit || saveState.status === "saving" || !isDirty}
+          >
             {saveState.status === "saving" ? "Saving..." : "Save evidence"}
           </button>
           <span
-            className={`save-state ${saveState.status === "error" ? "error" : ""}`}
+            className={`save-state ${visibleSaveState.status === "error" ? "error" : ""}`}
             role="status"
             aria-live="polite"
           >
-            {saveStateText(saveState)}
+            {saveStateText(visibleSaveState)}
           </span>
         </div>
       </form>

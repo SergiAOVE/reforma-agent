@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { type VisitTextExtractionJobType } from "@reforma/core";
+import { type VisitStatus, type VisitTextExtractionJobType } from "@reforma/core";
 
 import { loadProjectAccess } from "../../../../../lib/project-access";
 import { VISIT_EVIDENCE_BUCKET } from "../../../../../lib/storage";
@@ -76,6 +76,12 @@ const TEXT_EXTRACTION_JOBS: { type: VisitTextExtractionJobType; label: string }[
   { type: "generate_visit_summary", label: "Generate summary" },
   { type: "suggest_issues", label: "Suggest issues" },
   { type: "suggest_decisions", label: "Suggest decisions" },
+];
+
+const VISIT_STATUS_ACTIONS: { status: VisitStatus; label: string }[] = [
+  { status: "draft", label: "Draft" },
+  { status: "published", label: "Published" },
+  { status: "archived", label: "Archived" },
 ];
 
 function visitIdFromJobInput(input: unknown): string | null {
@@ -408,29 +414,28 @@ export default async function VisitPage({ params, searchParams }: VisitPageProps
               <h2>Visit status</h2>
               {canEdit ? (
                 <>
-                  <div className="button-row">
-                    <form action={setVisitStatus}>
-                      <input type="hidden" name="projectId" value={project.id} />
-                      <input type="hidden" name="visitId" value={visit.id} />
-                      <input type="hidden" name="status" value="published" />
-                      <button type="submit">Publish</button>
-                    </form>
-                    <form action={setVisitStatus}>
-                      <input type="hidden" name="projectId" value={project.id} />
-                      <input type="hidden" name="visitId" value={visit.id} />
-                      <input type="hidden" name="status" value="archived" />
-                      <button type="submit" className="secondary">
-                        Archive
-                      </button>
-                    </form>
-                    <form action={setVisitStatus}>
-                      <input type="hidden" name="projectId" value={project.id} />
-                      <input type="hidden" name="visitId" value={visit.id} />
-                      <input type="hidden" name="status" value="draft" />
-                      <button type="submit" className="secondary">
-                        Mark draft
-                      </button>
-                    </form>
+                  <div className="status-action-row" aria-label="Visit status">
+                    {VISIT_STATUS_ACTIONS.map((action) => {
+                      const isCurrent = visit.status === action.status;
+
+                      return (
+                        <form key={action.status} action={setVisitStatus}>
+                          <input type="hidden" name="projectId" value={project.id} />
+                          <input type="hidden" name="visitId" value={visit.id} />
+                          <input type="hidden" name="status" value={action.status} />
+                          <button
+                            type="submit"
+                            className={
+                              isCurrent ? "status-action active" : "status-action secondary"
+                            }
+                            disabled={isCurrent}
+                            aria-pressed={isCurrent}
+                          >
+                            {action.label}
+                          </button>
+                        </form>
+                      );
+                    })}
                   </div>
                   <div className="danger-zone">
                     <form action={deleteVisit}>
