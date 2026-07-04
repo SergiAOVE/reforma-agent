@@ -201,6 +201,40 @@ button.link {
   border-top: none;
 }
 
+.compact-stack-list .stack-item {
+  padding-block: 0.25rem;
+}
+
+.compact-stack-list .stack-item:target {
+  border-radius: 8px;
+  background: #e8f2ec;
+}
+
+.dashboard-item-link {
+  display: block;
+  margin-inline: -0.55rem;
+  padding: 0.55rem;
+  border-radius: 8px;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.dashboard-item-link:hover {
+  background: #f8f7f3;
+}
+
+.dashboard-item-link .muted {
+  margin-bottom: 0;
+}
+
+.compact-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
 .inline-edit {
   margin-top: 0.75rem;
 }
@@ -590,6 +624,136 @@ button.budget-item-summary > .save-state {
   flex-wrap: wrap;
 }
 
+.project-timeline {
+  margin: 1rem 0 1.25rem;
+  padding: 0.85rem 0 0.35rem;
+}
+
+.project-timeline-header {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  align-items: start;
+}
+
+.project-timeline-header > div:last-child {
+  text-align: right;
+}
+
+.timeline-today-label {
+  text-align: center;
+}
+
+.timeline-label {
+  display: block;
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+}
+
+.project-timeline-track {
+  position: relative;
+  height: 4.2rem;
+  margin-top: 0.7rem;
+}
+
+.project-timeline-line,
+.project-timeline-progress {
+  position: absolute;
+  top: 1.35rem;
+  left: 0;
+  height: 2px;
+  border-radius: 999px;
+}
+
+.project-timeline-line {
+  right: 0;
+  background: var(--border);
+}
+
+.project-timeline-progress {
+  background: var(--accent);
+}
+
+.project-timeline-end,
+.project-timeline-today,
+.project-timeline-milestone {
+  position: absolute;
+  z-index: 1;
+  transform: translateX(-50%);
+}
+
+.project-timeline-end {
+  top: 1.08rem;
+  width: 0.6rem;
+  height: 0.6rem;
+  border: 2px solid var(--accent);
+  border-radius: 999px;
+  background: var(--surface);
+}
+
+.project-timeline-end.start {
+  left: 0;
+}
+
+.project-timeline-end.finish {
+  left: 100%;
+}
+
+.project-timeline-today {
+  top: 0.35rem;
+  width: 2px;
+  height: 2.05rem;
+  border-radius: 999px;
+  background: var(--accent);
+}
+
+.project-timeline-today::after {
+  position: absolute;
+  bottom: -0.28rem;
+  left: 50%;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  background: var(--accent);
+  content: "";
+  transform: translateX(-50%);
+}
+
+.project-timeline-milestone {
+  top: 1.02rem;
+  width: 0.72rem;
+  height: 0.72rem;
+  border: 2px solid var(--surface);
+  background: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.project-timeline-milestone.decision {
+  background: var(--danger);
+  box-shadow: 0 0 0 1px var(--danger);
+}
+
+.project-timeline-milestone.summary {
+  background: #8c8276;
+  box-shadow: 0 0 0 1px #8c8276;
+}
+
+.project-timeline-months {
+  position: absolute;
+  inset: 0;
+}
+
+.project-timeline-month {
+  position: absolute;
+  top: 2.75rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
 @media (max-width: 720px) {
   button.setup-entity-summary,
   button.budget-item-summary {
@@ -608,6 +772,18 @@ button.budget-item-summary > .save-state {
   button.setup-entity-summary > .save-state,
   button.budget-item-summary > .save-state {
     white-space: normal;
+  }
+}
+
+@media (max-width: 560px) {
+  .project-timeline-header {
+    grid-template-columns: 1fr;
+  }
+
+  .project-timeline-header > div,
+  .project-timeline-header > div:last-child,
+  .timeline-today-label {
+    text-align: left;
   }
 }
 

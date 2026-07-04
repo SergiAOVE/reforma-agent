@@ -84,6 +84,8 @@ const VISIT_STATUS_ACTIONS: { status: VisitStatus; label: string }[] = [
   { status: "archived", label: "Archived" },
 ];
 
+const OPEN_ISSUE_STATUSES = ["open", "in_review", "waiting_builder", "waiting_owner"] as const;
+
 function visitIdFromJobInput(input: unknown): string | null {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     return null;
@@ -139,6 +141,8 @@ export default async function VisitPage({ params, searchParams }: VisitPageProps
     { data: extractionJobs },
     { data: issueDrafts },
     { data: decisionDrafts },
+    { data: visitIssues },
+    { data: visitDecisions },
   ] = await Promise.all([
     supabase.from("zones").select("id, name").eq("project_id", project.id).order("name"),
     supabase.from("trades").select("id, name").eq("project_id", project.id).order("name"),
@@ -193,6 +197,24 @@ export default async function VisitPage({ params, searchParams }: VisitPageProps
       .eq("source", "ai")
       .in("review_state", ["ai_draft", "edited"])
       .order("created_at", { ascending: false }),
+    supabase
+      .from("issues")
+      .select(
+        "id, title, priority, status, zone_id, trade_id, cost_risk, schedule_risk, zones(name), trades(name)",
+      )
+      .eq("project_id", project.id)
+      .eq("visit_id", visitId)
+      .in("status", [...OPEN_ISSUE_STATUSES])
+      .order("updated_at", { ascending: false }),
+    supabase
+      .from("decisions")
+      .select(
+        "id, title, priority, status, deadline, zone_id, trade_id, cost_impact, schedule_impact, zones(name), trades(name)",
+      )
+      .eq("project_id", project.id)
+      .eq("visit_id", visitId)
+      .eq("status", "pending")
+      .order("deadline", { ascending: true, nullsFirst: false }),
   ]);
 
   const safeZones = zones ?? [];
@@ -200,6 +222,8 @@ export default async function VisitPage({ params, searchParams }: VisitPageProps
   const safeContractItems = contractItems ?? [];
   const safeIssueDrafts = issueDrafts ?? [];
   const safeDecisionDrafts = decisionDrafts ?? [];
+  const safeVisitIssues = visitIssues ?? [];
+  const safeVisitDecisions = visitDecisions ?? [];
   const hasAiSummaryDraft =
     visit.summary_source === "ai" &&
     (visit.summary_review_state === "ai_draft" || visit.summary_review_state === "edited") &&
@@ -483,6 +507,61 @@ export default async function VisitPage({ params, searchParams }: VisitPageProps
                 ) : null;
               })}
             </section>
+
+            <div className="grid two">
+              <section className="card" id="visit-open-issues">
+                <h2>Open issues</h2>
+                {safeVisitIssues.length === 0 ? (
+                  <p className="muted">No open issues for this visit.</p>
+                ) : (
+                  <ul className="stack-list compact-stack-list">
+                    {safeVisitIssues.map((issue) => (
+                      <li key={issue.id} id={`issue-${issue.id}`} className="stack-item">
+                        <div className="compact-status-row">
+                          <strong>{issue.title}</strong>
+                          <span className={`badge status-${issue.status}`}>{issue.status}</span>
+                        </div>
+                        <p className="muted">
+                          {issue.priority}
+                          {issue.zones?.name ? ` | ${issue.zones.name}` : ""}
+                          {issue.trades?.name ? ` | ${issue.trades.name}` : ""}
+                          {issue.cost_risk ? ` | ${issue.cost_risk}` : ""}
+                          {issue.schedule_risk ? ` | ${issue.schedule_risk}` : ""}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+
+              <section className="card" id="visit-pending-decisions">
+                <h2>Pending decisions</h2>
+                {safeVisitDecisions.length === 0 ? (
+                  <p className="muted">No pending decisions for this visit.</p>
+                ) : (
+                  <ul className="stack-list compact-stack-list">
+                    {safeVisitDecisions.map((decision) => (
+                      <li key={decision.id} id={`decision-${decision.id}`} className="stack-item">
+                        <div className="compact-status-row">
+                          <strong>{decision.title}</strong>
+                          <span className={`badge status-${decision.status}`}>
+                            {decision.status}
+                          </span>
+                        </div>
+                        <p className="muted">
+                          {decision.priority}
+                          {decision.deadline ? ` | Due ${decision.deadline}` : ""}
+                          {decision.zones?.name ? ` | ${decision.zones.name}` : ""}
+                          {decision.trades?.name ? ` | ${decision.trades.name}` : ""}
+                          {decision.cost_impact ? ` | ${decision.cost_impact}` : ""}
+                          {decision.schedule_impact ? ` | ${decision.schedule_impact}` : ""}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            </div>
 
             <section className="card">
               <h2>AI drafts</h2>

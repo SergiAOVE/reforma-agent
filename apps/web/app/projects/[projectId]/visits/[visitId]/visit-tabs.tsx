@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState, type ReactNode } from "react";
+import { useEffect, useId, useState, type ReactNode } from "react";
 
 type VisitTabId = "details" | "evidence" | "review";
 
@@ -16,10 +16,45 @@ const TABS: { id: VisitTabId; label: string }[] = [
   { id: "review", label: "Review & publish" },
 ];
 
+function tabFromHash(hash: string): VisitTabId {
+  const cleanHash = hash.replace(/^#/, "");
+  if (cleanHash === "evidence" || cleanHash.startsWith("evidence-")) return "evidence";
+  if (
+    cleanHash === "review" ||
+    cleanHash.startsWith("issue-") ||
+    cleanHash.startsWith("decision-")
+  ) {
+    return "review";
+  }
+  return "details";
+}
+
 export function VisitTabs({ details, evidence, review }: VisitTabsProps) {
   const [activeTab, setActiveTab] = useState<VisitTabId>("details");
   const idPrefix = useId();
   const panels: Record<VisitTabId, ReactNode> = { details, evidence, review };
+
+  useEffect(() => {
+    const syncTabFromHash = () => {
+      const nextTab = tabFromHash(window.location.hash);
+      setActiveTab(nextTab);
+
+      window.requestAnimationFrame(() => {
+        const targetId = window.location.hash.replace(/^#/, "");
+        if (!targetId) return;
+        document.getElementById(targetId)?.scrollIntoView({ block: "center" });
+      });
+    };
+
+    syncTabFromHash();
+    window.addEventListener("hashchange", syncTabFromHash);
+    return () => window.removeEventListener("hashchange", syncTabFromHash);
+  }, []);
+
+  const selectTab = (tab: VisitTabId) => {
+    setActiveTab(tab);
+    window.history.replaceState(null, "", `#${tab}`);
+  };
 
   return (
     <div className="visit-tabs">
@@ -35,7 +70,7 @@ export function VisitTabs({ details, evidence, review }: VisitTabsProps) {
               aria-selected={selected}
               aria-controls={`${idPrefix}-${tab.id}-panel`}
               className={selected ? "tab-button active" : "tab-button"}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => selectTab(tab.id)}
             >
               {tab.label}
             </button>
