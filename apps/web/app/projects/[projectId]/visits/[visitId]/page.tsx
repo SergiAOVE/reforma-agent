@@ -464,7 +464,7 @@ export default async function VisitPage({ params, searchParams }: VisitPageProps
                       <input type="hidden" name="projectId" value={project.id} />
                       <input type="hidden" name="visitId" value={visit.id} />
                       <input type="hidden" name="jobType" value={definition.type} />
-                      <button type="submit" disabled={!canEdit || isRunning}>
+                      <button type="submit" className="secondary" disabled={!canEdit || isRunning}>
                         {isRunning ? `${definition.label} queued` : definition.label}
                       </button>
                       {job ? (
