@@ -42,7 +42,12 @@ export function VisitTabs({ details, evidence, review }: VisitTabsProps) {
       window.requestAnimationFrame(() => {
         const targetId = window.location.hash.replace(/^#/, "");
         if (!targetId) return;
-        document.getElementById(targetId)?.scrollIntoView({ block: "center" });
+        const target = document.getElementById(targetId);
+        const details = target instanceof HTMLDetailsElement ? target : target?.closest("details");
+        if (details instanceof HTMLDetailsElement) {
+          details.open = true;
+        }
+        target?.scrollIntoView({ block: "center" });
       });
     };
 

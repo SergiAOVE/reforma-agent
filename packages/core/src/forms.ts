@@ -177,6 +177,11 @@ export const issueReviewFormSchema = z.object({
 });
 export type IssueReviewFormInput = z.infer<typeof issueReviewFormSchema>;
 
+export const issueCreateFormSchema = issueReviewFormSchema
+  .omit({ action: true })
+  .extend({ visitId: nullableUuidSchema });
+export type IssueCreateFormInput = z.infer<typeof issueCreateFormSchema>;
+
 export const decisionReviewActionSchema = z.enum(["approve", "edit", "reject", "close"]);
 export type DecisionReviewAction = z.infer<typeof decisionReviewActionSchema>;
 
@@ -197,6 +202,11 @@ export const decisionReviewFormSchema = z.object({
   scheduleImpact: shortOptionalTrimmedText,
 });
 export type DecisionReviewFormInput = z.infer<typeof decisionReviewFormSchema>;
+
+export const decisionCreateFormSchema = decisionReviewFormSchema
+  .omit({ action: true })
+  .extend({ visitId: nullableUuidSchema });
+export type DecisionCreateFormInput = z.infer<typeof decisionCreateFormSchema>;
 
 export function evidenceTypeFromMimeType(mimeType: string): z.infer<typeof evidenceTypeSchema> {
   if (mimeType.startsWith("image/")) return "photo";

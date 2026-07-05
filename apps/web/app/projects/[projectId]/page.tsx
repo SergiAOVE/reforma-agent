@@ -3,6 +3,8 @@ import Link from "next/link";
 import { loadProjectAccess } from "../../../lib/project-access";
 import { enqueueWeeklySummary } from "./review-actions";
 import {
+  CreateDecisionForm,
+  CreateIssueForm,
   DecisionReviewForm,
   IssueReviewForm,
   SummaryReviewForm,
@@ -567,6 +569,14 @@ export default async function ProjectPage({ params, searchParams }: ProjectPageP
       <div className="grid two">
         <section className="card" id="open-issues">
           <h2>Open issues</h2>
+          <CreateIssueForm
+            projectId={project.id}
+            visits={safeTimelineVisits}
+            zones={safeZones}
+            trades={safeTrades}
+            contractItems={safeContractItems}
+            canEdit={canEdit}
+          />
           {safeOpenIssues.length === 0 ? (
             <p className="muted">No open issues.</p>
           ) : (
@@ -596,6 +606,13 @@ export default async function ProjectPage({ params, searchParams }: ProjectPageP
 
         <section className="card" id="pending-decisions">
           <h2>Pending decisions</h2>
+          <CreateDecisionForm
+            projectId={project.id}
+            visits={safeTimelineVisits}
+            zones={safeZones}
+            trades={safeTrades}
+            canEdit={canEdit}
+          />
           {safePendingDecisions.length === 0 ? (
             <p className="muted">No pending decisions.</p>
           ) : (

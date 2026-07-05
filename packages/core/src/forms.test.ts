@@ -4,11 +4,13 @@ import {
   addMemberSchema,
   audioTranscriptionEditSchema,
   contractItemFormSchema,
+  decisionCreateFormSchema,
   decisionReviewFormSchema,
   documentMetadataSchema,
   evidenceMetadataSchema,
   evidenceMimeTypeMatchesType,
   evidenceTypeFromMimeType,
+  issueCreateFormSchema,
   issueReviewFormSchema,
   parseBudgetCsv,
   projectFormSchema,
@@ -374,6 +376,38 @@ describe("issueReviewFormSchema", () => {
   });
 });
 
+describe("issueCreateFormSchema", () => {
+  it("accepts a human issue with optional visit and references", () => {
+    const parsed = issueCreateFormSchema.parse({
+      title: "  Water stain in kitchen ",
+      description: "",
+      priority: "high",
+      visitId: "11111111-1111-4111-8111-111111111111",
+      zoneId: "",
+      tradeId: "",
+      contractItemId: "",
+      costRisk: "",
+      scheduleRisk: "Needs inspection before closing the wall.",
+    });
+
+    expect(parsed).toMatchObject({
+      title: "Water stain in kitchen",
+      description: null,
+      priority: "high",
+      visitId: "11111111-1111-4111-8111-111111111111",
+      zoneId: null,
+      tradeId: null,
+      contractItemId: null,
+      costRisk: null,
+      scheduleRisk: "Needs inspection before closing the wall.",
+    });
+  });
+
+  it("rejects human issues without a title", () => {
+    expect(issueCreateFormSchema.safeParse({ title: "", priority: "medium" }).success).toBe(false);
+  });
+});
+
 describe("decisionReviewFormSchema", () => {
   it("accepts decision review edits with a nullable deadline", () => {
     const parsed = decisionReviewFormSchema.parse({
@@ -410,6 +444,46 @@ describe("decisionReviewFormSchema", () => {
         title: "Choose tiles",
         priority: "medium",
         deadline: "07/03/2026",
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe("decisionCreateFormSchema", () => {
+  it("accepts a pending decision with optional context", () => {
+    const parsed = decisionCreateFormSchema.parse({
+      title: "Choose bathroom tile",
+      description: "Owner selection needed.",
+      priority: "medium",
+      visitId: "",
+      zoneId: "",
+      tradeId: "",
+      deadline: "2026-07-15",
+      optionsText: "Porcelain\nCeramic",
+      recommendation: "",
+      costImpact: "Porcelain is higher cost.",
+      scheduleImpact: "",
+    });
+
+    expect(parsed).toMatchObject({
+      title: "Choose bathroom tile",
+      description: "Owner selection needed.",
+      priority: "medium",
+      visitId: null,
+      deadline: "2026-07-15",
+      optionsText: "Porcelain\nCeramic",
+      recommendation: null,
+      costImpact: "Porcelain is higher cost.",
+      scheduleImpact: null,
+    });
+  });
+
+  it("rejects invalid pending decision deadlines", () => {
+    expect(
+      decisionCreateFormSchema.safeParse({
+        title: "Choose bathroom tile",
+        priority: "medium",
+        deadline: "15/07/2026",
       }).success,
     ).toBe(false);
   });

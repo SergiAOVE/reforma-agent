@@ -1,7 +1,16 @@
+import Link from "next/link";
+
 import { PRIORITIES } from "@reforma/core";
 import type { Json } from "@reforma/db";
 
-import { reviewDecision, reviewIssue, reviewSummary, reviewWeeklySummary } from "./review-actions";
+import {
+  createDecision,
+  createIssue,
+  reviewDecision,
+  reviewIssue,
+  reviewSummary,
+  reviewWeeklySummary,
+} from "./review-actions";
 
 type ReturnTo = "project" | "visit";
 
@@ -14,6 +23,12 @@ interface ContractItemOption {
   id: string;
   code: string | null;
   title: string;
+}
+
+interface VisitOption {
+  id: string;
+  title: string;
+  visit_date: string;
 }
 
 interface SummaryReviewVisit {
@@ -141,6 +156,215 @@ function ReferenceSelects({
   );
 }
 
+function VisitSelect({
+  visits,
+  disabled,
+  defaultValue,
+}: {
+  visits: VisitOption[];
+  disabled: boolean;
+  defaultValue?: string | null;
+}) {
+  return (
+    <label className="field">
+      <span>Related visit</span>
+      <select name="visitId" defaultValue={defaultValue ?? ""} disabled={disabled}>
+        <option value="">No visit</option>
+        {visits.map((visit) => (
+          <option key={visit.id} value={visit.id}>
+            {visit.visit_date} | {visit.title}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+export function CreateIssueForm({
+  projectId,
+  visits,
+  zones,
+  trades,
+  contractItems,
+  canEdit,
+}: {
+  projectId: string;
+  visits: VisitOption[];
+  zones: ReferenceOption[];
+  trades: ReferenceOption[];
+  contractItems: ContractItemOption[];
+  canEdit: boolean;
+}) {
+  if (!canEdit) {
+    return <p className="muted">Your role is read-only here.</p>;
+  }
+
+  return (
+    <details className="compact-create-panel">
+      <summary>Add issue</summary>
+      <form action={createIssue} className="inline-edit compact-create-form">
+        <input type="hidden" name="projectId" value={projectId} />
+        <input type="hidden" name="returnTo" value="project" />
+        <label className="field">
+          <span>Title</span>
+          <input name="title" required maxLength={220} placeholder="What needs attention?" />
+        </label>
+        <label className="field">
+          <span>Description</span>
+          <textarea name="description" rows={3} maxLength={2000} />
+        </label>
+        <div className="grid two">
+          <label className="field">
+            <span>Priority</span>
+            <select name="priority" defaultValue="medium">
+              {PRIORITIES.map((priority) => (
+                <option key={priority} value={priority}>
+                  {priority}
+                </option>
+              ))}
+            </select>
+          </label>
+          <VisitSelect visits={visits} disabled={false} />
+        </div>
+        <ReferenceSelects zones={zones} trades={trades} defaults={{}} disabled={false} />
+        <label className="field">
+          <span>Budget item</span>
+          <select name="contractItemId" defaultValue="">
+            <option value="">None</option>
+            {contractItems.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.code ? `${item.code} | ` : ""}
+                {item.title}
+              </option>
+            ))}
+          </select>
+        </label>
+        <div className="grid two">
+          <label className="field">
+            <span>Cost risk</span>
+            <input name="costRisk" maxLength={240} />
+          </label>
+          <label className="field">
+            <span>Schedule risk</span>
+            <input name="scheduleRisk" maxLength={240} />
+          </label>
+        </div>
+        <button type="submit">Create issue</button>
+      </form>
+    </details>
+  );
+}
+
+export function CreateDecisionForm({
+  projectId,
+  visits,
+  zones,
+  trades,
+  canEdit,
+  defaults,
+  summaryLabel = "Add decision",
+  submitLabel = "Create decision",
+  returnTo = "project",
+}: {
+  projectId: string;
+  visits: VisitOption[];
+  zones: ReferenceOption[];
+  trades: ReferenceOption[];
+  canEdit: boolean;
+  defaults?: {
+    title?: string;
+    description?: string | null;
+    priority?: string;
+    visitId?: string | null;
+    zoneId?: string | null;
+    tradeId?: string | null;
+    costImpact?: string | null;
+    scheduleImpact?: string | null;
+  };
+  summaryLabel?: string;
+  submitLabel?: string;
+  returnTo?: ReturnTo;
+}) {
+  if (!canEdit) {
+    return <p className="muted">Your role is read-only here.</p>;
+  }
+
+  return (
+    <details className="compact-create-panel">
+      <summary>{summaryLabel}</summary>
+      <form action={createDecision} className="inline-edit compact-create-form">
+        <input type="hidden" name="projectId" value={projectId} />
+        <input type="hidden" name="returnTo" value={returnTo} />
+        <label className="field">
+          <span>Title</span>
+          <input
+            name="title"
+            required
+            maxLength={220}
+            placeholder="What needs a decision?"
+            defaultValue={defaults?.title ?? ""}
+          />
+        </label>
+        <label className="field">
+          <span>Description</span>
+          <textarea
+            name="description"
+            rows={3}
+            maxLength={2000}
+            defaultValue={defaults?.description ?? ""}
+          />
+        </label>
+        <div className="grid two">
+          <label className="field">
+            <span>Priority</span>
+            <select name="priority" defaultValue={defaults?.priority ?? "medium"}>
+              {PRIORITIES.map((priority) => (
+                <option key={priority} value={priority}>
+                  {priority}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            <span>Deadline</span>
+            <input name="deadline" type="date" />
+          </label>
+        </div>
+        <VisitSelect visits={visits} defaultValue={defaults?.visitId} disabled={false} />
+        <ReferenceSelects
+          zones={zones}
+          trades={trades}
+          defaults={defaults ?? {}}
+          disabled={false}
+        />
+        <label className="field">
+          <span>Options</span>
+          <textarea name="optionsText" rows={3} maxLength={2000} />
+        </label>
+        <label className="field">
+          <span>Recommendation</span>
+          <textarea name="recommendation" rows={2} maxLength={2000} />
+        </label>
+        <div className="grid two">
+          <label className="field">
+            <span>Cost impact</span>
+            <input name="costImpact" maxLength={240} defaultValue={defaults?.costImpact ?? ""} />
+          </label>
+          <label className="field">
+            <span>Schedule impact</span>
+            <input
+              name="scheduleImpact"
+              maxLength={240}
+              defaultValue={defaults?.scheduleImpact ?? ""}
+            />
+          </label>
+        </div>
+        <button type="submit">{submitLabel}</button>
+      </form>
+    </details>
+  );
+}
+
 export function SummaryReviewForm({
   projectId,
   visit,
@@ -258,6 +482,8 @@ export function IssueReviewForm({
   contractItems,
   canEdit,
   returnTo,
+  mode = "review",
+  showHeader = true,
 }: {
   projectId: string;
   issue: IssueReviewItem;
@@ -266,20 +492,27 @@ export function IssueReviewForm({
   contractItems: ContractItemOption[];
   canEdit: boolean;
   returnTo: ReturnTo;
+  mode?: "review" | "inspection";
+  showHeader?: boolean;
 }) {
+  const showAiReviewActions = mode === "review";
+
   return (
     <form action={reviewIssue} className="inline-edit">
       <ReturnFields projectId={projectId} visitId={issue.visit_id} returnTo={returnTo} />
       <input type="hidden" name="issueId" value={issue.id} />
-      <div className="split-row">
-        <div>
-          <strong>{issue.title}</strong>
-          <div className="muted">
-            {issue.priority} | {issue.zones?.name ?? "No zone"} | {issue.trades?.name ?? "No trade"}
+      {showHeader ? (
+        <div className="split-row">
+          <div>
+            <strong>{issue.title}</strong>
+            <div className="muted">
+              {issue.priority} | {issue.zones?.name ?? "No zone"} |{" "}
+              {issue.trades?.name ?? "No trade"}
+            </div>
           </div>
+          <span className={`badge status-${issue.status}`}>{issue.status}</span>
         </div>
-        <span className={`badge status-${issue.status}`}>{issue.status}</span>
-      </div>
+      ) : null}
       <label className="field">
         <span>Title</span>
         <input
@@ -346,19 +579,100 @@ export function IssueReviewForm({
       </div>
       <div className="button-row">
         <button type="submit" name="action" value="edit" disabled={!canEdit}>
-          Save edit
+          {mode === "inspection" ? "Save issue" : "Save edit"}
         </button>
-        <button type="submit" name="action" value="approve" disabled={!canEdit}>
-          Approve
-        </button>
+        {showAiReviewActions ? (
+          <button type="submit" name="action" value="approve" disabled={!canEdit}>
+            Approve
+          </button>
+        ) : null}
         <button type="submit" name="action" value="close" className="secondary" disabled={!canEdit}>
           Close
         </button>
-        <button type="submit" name="action" value="reject" className="danger" disabled={!canEdit}>
-          Reject
-        </button>
+        {showAiReviewActions ? (
+          <button type="submit" name="action" value="reject" className="danger" disabled={!canEdit}>
+            Reject
+          </button>
+        ) : null}
       </div>
     </form>
+  );
+}
+
+export function IssueInspectionPanel({
+  projectId,
+  issue,
+  visit,
+  zones,
+  trades,
+  contractItems,
+  canEdit,
+}: {
+  projectId: string;
+  issue: IssueReviewItem;
+  visit: VisitOption;
+  zones: ReferenceOption[];
+  trades: ReferenceOption[];
+  contractItems: ContractItemOption[];
+  canEdit: boolean;
+}) {
+  return (
+    <details id={`issue-${issue.id}`} className="inspection-panel">
+      <summary>
+        <div className="compact-status-row">
+          <strong>{issue.title}</strong>
+          <span className={`badge status-${issue.status}`}>{issue.status}</span>
+        </div>
+        <p className="muted">
+          {issue.priority}
+          {issue.zones?.name ? ` | ${issue.zones.name}` : ""}
+          {issue.trades?.name ? ` | ${issue.trades.name}` : ""}
+          {issue.cost_risk ? ` | ${issue.cost_risk}` : ""}
+          {issue.schedule_risk ? ` | ${issue.schedule_risk}` : ""}
+        </p>
+      </summary>
+      <div className="inspection-body">
+        <IssueReviewForm
+          projectId={projectId}
+          issue={issue}
+          zones={zones}
+          trades={trades}
+          contractItems={contractItems}
+          canEdit={canEdit}
+          returnTo="visit"
+          mode="inspection"
+          showHeader={false}
+        />
+        <div className="inspection-actions">
+          <CreateDecisionForm
+            projectId={projectId}
+            visits={[visit]}
+            zones={zones}
+            trades={trades}
+            canEdit={canEdit}
+            defaults={{
+              title: issue.title,
+              description: issue.description,
+              priority: issue.priority,
+              visitId: visit.id,
+              zoneId: issue.zone_id,
+              tradeId: issue.trade_id,
+              costImpact: issue.cost_risk,
+              scheduleImpact: issue.schedule_risk,
+            }}
+            summaryLabel="Add related decision"
+            submitLabel="Create decision"
+            returnTo="visit"
+          />
+          <Link
+            className="button-link secondary"
+            href={`/projects/${projectId}/budget#add-budget-item`}
+          >
+            Add budget item
+          </Link>
+        </div>
+      </div>
+    </details>
   );
 }
 
@@ -369,6 +683,8 @@ export function DecisionReviewForm({
   trades,
   canEdit,
   returnTo,
+  mode = "review",
+  showHeader = true,
 }: {
   projectId: string;
   decision: DecisionReviewItem;
@@ -376,22 +692,28 @@ export function DecisionReviewForm({
   trades: ReferenceOption[];
   canEdit: boolean;
   returnTo: ReturnTo;
+  mode?: "review" | "inspection";
+  showHeader?: boolean;
 }) {
+  const showAiReviewActions = mode === "review";
+
   return (
     <form action={reviewDecision} className="inline-edit">
       <ReturnFields projectId={projectId} visitId={decision.visit_id} returnTo={returnTo} />
       <input type="hidden" name="decisionId" value={decision.id} />
-      <div className="split-row">
-        <div>
-          <strong>{decision.title}</strong>
-          <div className="muted">
-            {decision.priority} | {decision.zones?.name ?? "No zone"} |{" "}
-            {decision.trades?.name ?? "No trade"}
-            {decision.deadline ? ` | ${decision.deadline}` : ""}
+      {showHeader ? (
+        <div className="split-row">
+          <div>
+            <strong>{decision.title}</strong>
+            <div className="muted">
+              {decision.priority} | {decision.zones?.name ?? "No zone"} |{" "}
+              {decision.trades?.name ?? "No trade"}
+              {decision.deadline ? ` | ${decision.deadline}` : ""}
+            </div>
           </div>
+          <span className={`badge status-${decision.status}`}>{decision.status}</span>
         </div>
-        <span className={`badge status-${decision.status}`}>{decision.status}</span>
-      </div>
+      ) : null}
       <label className="field">
         <span>Title</span>
         <input
@@ -475,7 +797,7 @@ export function DecisionReviewForm({
       </div>
       <div className="button-row">
         <button type="submit" name="action" value="edit" disabled={!canEdit}>
-          Save edit
+          {mode === "inspection" ? "Save decision" : "Save edit"}
         </button>
         <button type="submit" name="action" value="approve" disabled={!canEdit}>
           Approve
@@ -483,10 +805,65 @@ export function DecisionReviewForm({
         <button type="submit" name="action" value="close" className="secondary" disabled={!canEdit}>
           Close
         </button>
-        <button type="submit" name="action" value="reject" className="danger" disabled={!canEdit}>
-          Reject
-        </button>
+        {showAiReviewActions ? (
+          <button type="submit" name="action" value="reject" className="danger" disabled={!canEdit}>
+            Reject
+          </button>
+        ) : null}
       </div>
     </form>
+  );
+}
+
+export function DecisionInspectionPanel({
+  projectId,
+  decision,
+  zones,
+  trades,
+  canEdit,
+}: {
+  projectId: string;
+  decision: DecisionReviewItem;
+  zones: ReferenceOption[];
+  trades: ReferenceOption[];
+  canEdit: boolean;
+}) {
+  return (
+    <details id={`decision-${decision.id}`} className="inspection-panel">
+      <summary>
+        <div className="compact-status-row">
+          <strong>{decision.title}</strong>
+          <span className={`badge status-${decision.status}`}>{decision.status}</span>
+        </div>
+        <p className="muted">
+          {decision.priority}
+          {decision.deadline ? ` | Due ${decision.deadline}` : ""}
+          {decision.zones?.name ? ` | ${decision.zones.name}` : ""}
+          {decision.trades?.name ? ` | ${decision.trades.name}` : ""}
+          {decision.cost_impact ? ` | ${decision.cost_impact}` : ""}
+          {decision.schedule_impact ? ` | ${decision.schedule_impact}` : ""}
+        </p>
+      </summary>
+      <div className="inspection-body">
+        <DecisionReviewForm
+          projectId={projectId}
+          decision={decision}
+          zones={zones}
+          trades={trades}
+          canEdit={canEdit}
+          returnTo="visit"
+          mode="inspection"
+          showHeader={false}
+        />
+        <div className="inspection-actions">
+          <Link
+            className="button-link secondary"
+            href={`/projects/${projectId}/budget#add-budget-item`}
+          >
+            Add budget item
+          </Link>
+        </div>
+      </div>
+    </details>
   );
 }

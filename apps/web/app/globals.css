@@ -74,6 +74,11 @@ a {
   font-size: 1.05rem;
 }
 
+#add-budget-item:target {
+  border-color: var(--accent);
+  background: #fbfaf7;
+}
+
 .grid {
   display: grid;
   gap: 0.75rem;
@@ -235,6 +240,68 @@ button.link {
   flex-wrap: wrap;
 }
 
+.compact-create-panel {
+  margin-block: 0.75rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fbfaf7;
+}
+
+.compact-create-panel > summary {
+  cursor: pointer;
+  padding: 0.65rem 0.75rem;
+  color: var(--accent);
+  font-weight: 650;
+  list-style-position: inside;
+}
+
+.compact-create-panel[open] > summary {
+  border-bottom: 1px solid var(--border);
+}
+
+.compact-create-form {
+  padding: 0 0.75rem 0.75rem;
+}
+
+.inspection-panel {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.inspection-panel > summary {
+  cursor: pointer;
+  padding: 0.75rem;
+  list-style-position: inside;
+}
+
+.inspection-panel > summary:hover {
+  background: #f8f7f3;
+}
+
+.inspection-panel > summary .muted {
+  margin-bottom: 0;
+}
+
+.inspection-panel[open] > summary,
+.inspection-panel:target > summary {
+  border-bottom: 1px solid var(--border);
+  background: #e8f2ec;
+}
+
+.inspection-body {
+  padding: 0.75rem;
+}
+
+.inspection-actions {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+
 .inline-edit {
   margin-top: 0.75rem;
 }
@@ -279,6 +346,24 @@ button.link {
   justify-content: space-between;
   gap: 0.75rem;
   flex-wrap: wrap;
+}
+
+.button-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  border-radius: 8px;
+  padding: 0.55rem 1rem;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  text-decoration: none;
+}
+
+.button-link.secondary {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
 }
 
 .danger-zone {

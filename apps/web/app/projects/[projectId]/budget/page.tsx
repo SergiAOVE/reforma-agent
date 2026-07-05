@@ -122,7 +122,7 @@ export default async function BudgetPage({ params, searchParams }: BudgetPagePro
         </p>
       ) : null}
 
-      <section className="card">
+      <section className="card" id="add-budget-item">
         <h2>Add budget item</h2>
         <form action={createContractItem} className="compact-form">
           <input type="hidden" name="projectId" value={project.id} />

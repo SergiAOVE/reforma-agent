@@ -4,7 +4,9 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import {
+  decisionCreateFormSchema,
   decisionReviewFormSchema,
+  issueCreateFormSchema,
   issueReviewFormSchema,
   summaryReviewFormSchema,
   weeklySummaryRequestSchema,
@@ -16,14 +18,20 @@ import type { Database, Json } from "@reforma/db";
 import { requireUser } from "../../../lib/auth";
 
 type IssueUpdate = Database["public"]["Tables"]["issues"]["Update"];
+type IssueInsert = Database["public"]["Tables"]["issues"]["Insert"];
 type DecisionUpdate = Database["public"]["Tables"]["decisions"]["Update"];
+type DecisionInsert = Database["public"]["Tables"]["decisions"]["Insert"];
 type VisitUpdate = Database["public"]["Tables"]["visits"]["Update"];
 type WeeklySummaryUpdate = Database["public"]["Tables"]["weekly_summaries"]["Update"];
 
 type ReturnTarget =
   { kind: "project"; projectId: string } | { kind: "visit"; projectId: string; visitId: string };
 
-function reviewRedirect(target: ReturnTarget, params: { error?: string; ok?: string }): never {
+function reviewRedirect(
+  target: ReturnTarget,
+  params: { error?: string; ok?: string },
+  hash?: string,
+): never {
   const query = new URLSearchParams();
   if (params.error) query.set("error", params.error);
   if (params.ok) query.set("ok", params.ok);
@@ -33,7 +41,8 @@ function reviewRedirect(target: ReturnTarget, params: { error?: string; ok?: str
       ? `/projects/${target.projectId}/visits/${target.visitId}`
       : `/projects/${target.projectId}`;
 
-  redirect(`${path}?${query.toString()}`);
+  const queryString = query.toString();
+  redirect(`${path}${queryString ? `?${queryString}` : ""}${hash ? `#${hash}` : ""}`);
 }
 
 function requireProjectId(formData: FormData): string {
@@ -217,6 +226,178 @@ export async function enqueueWeeklySummary(formData: FormData): Promise<void> {
 
   revalidatePath(`/projects/${projectId}`);
   reviewRedirect(target, { ok: "Weekly summary job queued." });
+}
+
+export async function createIssue(formData: FormData): Promise<void> {
+  const projectId = requireProjectId(formData);
+  const target = readReturnTarget(formData, projectId);
+  const { supabase, user } = await requireUser();
+  const parsed = issueCreateFormSchema.safeParse({
+    title: formData.get("title"),
+    description: formData.get("description"),
+    priority: formData.get("priority"),
+    visitId: formData.get("visitId"),
+    zoneId: formData.get("zoneId"),
+    tradeId: formData.get("tradeId"),
+    contractItemId: formData.get("contractItemId"),
+    costRisk: formData.get("costRisk"),
+    scheduleRisk: formData.get("scheduleRisk"),
+  });
+
+  if (!parsed.success) {
+    reviewRedirect(
+      target,
+      { error: parsed.error.issues[0]?.message ?? "Invalid issue." },
+      target.kind === "visit" ? "visit-open-issues" : "open-issues",
+    );
+  }
+
+  const row: IssueInsert = {
+    project_id: projectId,
+    visit_id: parsed.data.visitId,
+    title: parsed.data.title,
+    description: parsed.data.description,
+    priority: parsed.data.priority,
+    status: "open",
+    review_state: "human_created",
+    source: "human",
+    zone_id: parsed.data.zoneId,
+    trade_id: parsed.data.tradeId,
+    contract_item_id: parsed.data.contractItemId,
+    cost_risk: parsed.data.costRisk,
+    schedule_risk: parsed.data.scheduleRisk,
+    created_by: user.id,
+  };
+
+  const { data, error } = await supabase.from("issues").insert(row).select("id, visit_id").single();
+
+  if (error) {
+    reviewRedirect(
+      target,
+      { error: error.message },
+      target.kind === "visit" ? "visit-open-issues" : "open-issues",
+    );
+  }
+
+  const auditError = await writeAuditLog({
+    projectId,
+    actorUserId: user.id,
+    action: "issue.created",
+    entityType: "issue",
+    entityId: data.id,
+    metadata: {
+      status: row.status,
+      reviewState: row.review_state,
+      source: row.source,
+      visitId: row.visit_id,
+    },
+  });
+
+  if (auditError) {
+    reviewRedirect(
+      target,
+      { error: auditError },
+      target.kind === "visit" ? "visit-open-issues" : "open-issues",
+    );
+  }
+
+  revalidatePath(`/projects/${projectId}`);
+  if (data.visit_id) revalidatePath(`/projects/${projectId}/visits/${data.visit_id}`);
+  reviewRedirect(
+    target,
+    { ok: "Issue created." },
+    target.kind === "visit" ? `issue-${data.id}` : "open-issues",
+  );
+}
+
+export async function createDecision(formData: FormData): Promise<void> {
+  const projectId = requireProjectId(formData);
+  const target = readReturnTarget(formData, projectId);
+  const { supabase, user } = await requireUser();
+  const parsed = decisionCreateFormSchema.safeParse({
+    title: formData.get("title"),
+    description: formData.get("description"),
+    priority: formData.get("priority"),
+    visitId: formData.get("visitId"),
+    zoneId: formData.get("zoneId"),
+    tradeId: formData.get("tradeId"),
+    deadline: formData.get("deadline"),
+    optionsText: formData.get("optionsText"),
+    recommendation: formData.get("recommendation"),
+    costImpact: formData.get("costImpact"),
+    scheduleImpact: formData.get("scheduleImpact"),
+  });
+
+  if (!parsed.success) {
+    reviewRedirect(
+      target,
+      { error: parsed.error.issues[0]?.message ?? "Invalid decision." },
+      target.kind === "visit" ? "visit-pending-decisions" : "pending-decisions",
+    );
+  }
+
+  const row: DecisionInsert = {
+    project_id: projectId,
+    visit_id: parsed.data.visitId,
+    title: parsed.data.title,
+    description: parsed.data.description,
+    priority: parsed.data.priority,
+    status: "pending",
+    review_state: "human_created",
+    source: "human",
+    zone_id: parsed.data.zoneId,
+    trade_id: parsed.data.tradeId,
+    deadline: parsed.data.deadline,
+    options: optionsFromText(parsed.data.optionsText),
+    recommendation: parsed.data.recommendation,
+    cost_impact: parsed.data.costImpact,
+    schedule_impact: parsed.data.scheduleImpact,
+    created_by: user.id,
+  };
+
+  const { data, error } = await supabase
+    .from("decisions")
+    .insert(row)
+    .select("id, visit_id")
+    .single();
+
+  if (error) {
+    reviewRedirect(
+      target,
+      { error: error.message },
+      target.kind === "visit" ? "visit-pending-decisions" : "pending-decisions",
+    );
+  }
+
+  const auditError = await writeAuditLog({
+    projectId,
+    actorUserId: user.id,
+    action: "decision.created",
+    entityType: "decision",
+    entityId: data.id,
+    metadata: {
+      status: row.status,
+      reviewState: row.review_state,
+      source: row.source,
+      visitId: row.visit_id,
+    },
+  });
+
+  if (auditError) {
+    reviewRedirect(
+      target,
+      { error: auditError },
+      target.kind === "visit" ? "visit-pending-decisions" : "pending-decisions",
+    );
+  }
+
+  revalidatePath(`/projects/${projectId}`);
+  if (data.visit_id) revalidatePath(`/projects/${projectId}/visits/${data.visit_id}`);
+  reviewRedirect(
+    target,
+    { ok: "Decision created." },
+    target.kind === "visit" ? `decision-${data.id}` : "pending-decisions",
+  );
 }
 
 export async function reviewWeeklySummary(formData: FormData): Promise<void> {
@@ -407,7 +588,15 @@ export async function reviewIssue(formData: FormData): Promise<void> {
 
   revalidatePath(`/projects/${projectId}`);
   if (issue.visit_id) revalidatePath(`/projects/${projectId}/visits/${issue.visit_id}`);
-  reviewRedirect(target, { ok: "Issue review saved." });
+  reviewRedirect(
+    target,
+    { ok: "Issue review saved." },
+    target.kind === "visit" && (action === "close" || action === "reject")
+      ? "visit-open-issues"
+      : target.kind === "visit"
+        ? `issue-${issueId}`
+        : undefined,
+  );
 }
 
 export async function reviewDecision(formData: FormData): Promise<void> {
@@ -510,5 +699,13 @@ export async function reviewDecision(formData: FormData): Promise<void> {
 
   revalidatePath(`/projects/${projectId}`);
   if (decision.visit_id) revalidatePath(`/projects/${projectId}/visits/${decision.visit_id}`);
-  reviewRedirect(target, { ok: "Decision review saved." });
+  reviewRedirect(
+    target,
+    { ok: "Decision review saved." },
+    target.kind === "visit" && (action === "approve" || action === "close" || action === "reject")
+      ? "visit-pending-decisions"
+      : target.kind === "visit"
+        ? `decision-${decisionId}`
+        : undefined,
+  );
 }

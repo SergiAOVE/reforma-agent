@@ -5,7 +5,13 @@ import { type VisitStatus, type VisitTextExtractionJobType } from "@reforma/core
 
 import { loadProjectAccess } from "../../../../../lib/project-access";
 import { VISIT_EVIDENCE_BUCKET } from "../../../../../lib/storage";
-import { DecisionReviewForm, IssueReviewForm, SummaryReviewForm } from "../../review-ui";
+import {
+  DecisionInspectionPanel,
+  DecisionReviewForm,
+  IssueInspectionPanel,
+  IssueReviewForm,
+  SummaryReviewForm,
+} from "../../review-ui";
 import {
   deleteVisit,
   enqueueAudioTranscription,
@@ -200,7 +206,7 @@ export default async function VisitPage({ params, searchParams }: VisitPageProps
     supabase
       .from("issues")
       .select(
-        "id, title, priority, status, zone_id, trade_id, cost_risk, schedule_risk, zones(name), trades(name)",
+        "id, visit_id, title, description, priority, status, review_state, source, zone_id, trade_id, contract_item_id, cost_risk, schedule_risk, zones(name), trades(name)",
       )
       .eq("project_id", project.id)
       .eq("visit_id", visitId)
@@ -209,7 +215,7 @@ export default async function VisitPage({ params, searchParams }: VisitPageProps
     supabase
       .from("decisions")
       .select(
-        "id, title, priority, status, deadline, zone_id, trade_id, cost_impact, schedule_impact, zones(name), trades(name)",
+        "id, visit_id, title, description, priority, status, review_state, source, zone_id, trade_id, deadline, options, recommendation, cost_impact, schedule_impact, zones(name), trades(name)",
       )
       .eq("project_id", project.id)
       .eq("visit_id", visitId)
@@ -516,18 +522,16 @@ export default async function VisitPage({ params, searchParams }: VisitPageProps
                 ) : (
                   <ul className="stack-list compact-stack-list">
                     {safeVisitIssues.map((issue) => (
-                      <li key={issue.id} id={`issue-${issue.id}`} className="stack-item">
-                        <div className="compact-status-row">
-                          <strong>{issue.title}</strong>
-                          <span className={`badge status-${issue.status}`}>{issue.status}</span>
-                        </div>
-                        <p className="muted">
-                          {issue.priority}
-                          {issue.zones?.name ? ` | ${issue.zones.name}` : ""}
-                          {issue.trades?.name ? ` | ${issue.trades.name}` : ""}
-                          {issue.cost_risk ? ` | ${issue.cost_risk}` : ""}
-                          {issue.schedule_risk ? ` | ${issue.schedule_risk}` : ""}
-                        </p>
+                      <li key={issue.id} className="stack-item">
+                        <IssueInspectionPanel
+                          projectId={project.id}
+                          issue={issue}
+                          visit={visit}
+                          zones={safeZones}
+                          trades={safeTrades}
+                          contractItems={safeContractItems}
+                          canEdit={canEdit}
+                        />
                       </li>
                     ))}
                   </ul>
@@ -541,21 +545,14 @@ export default async function VisitPage({ params, searchParams }: VisitPageProps
                 ) : (
                   <ul className="stack-list compact-stack-list">
                     {safeVisitDecisions.map((decision) => (
-                      <li key={decision.id} id={`decision-${decision.id}`} className="stack-item">
-                        <div className="compact-status-row">
-                          <strong>{decision.title}</strong>
-                          <span className={`badge status-${decision.status}`}>
-                            {decision.status}
-                          </span>
-                        </div>
-                        <p className="muted">
-                          {decision.priority}
-                          {decision.deadline ? ` | Due ${decision.deadline}` : ""}
-                          {decision.zones?.name ? ` | ${decision.zones.name}` : ""}
-                          {decision.trades?.name ? ` | ${decision.trades.name}` : ""}
-                          {decision.cost_impact ? ` | ${decision.cost_impact}` : ""}
-                          {decision.schedule_impact ? ` | ${decision.schedule_impact}` : ""}
-                        </p>
+                      <li key={decision.id} className="stack-item">
+                        <DecisionInspectionPanel
+                          projectId={project.id}
+                          decision={decision}
+                          zones={safeZones}
+                          trades={safeTrades}
+                          canEdit={canEdit}
+                        />
                       </li>
                     ))}
                   </ul>
