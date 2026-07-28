@@ -82,7 +82,7 @@ export default async function VisitsPage({ params, searchParams }: VisitsPagePro
           </div>
           <div className="grid two">
             <label className="field">
-              <span>Primary zone</span>
+              <span>Primary zone (optional)</span>
               <select name="primaryZoneId" disabled={!canEdit}>
                 <option value="">None</option>
                 {safeZones.map((zone) => (
@@ -93,7 +93,7 @@ export default async function VisitsPage({ params, searchParams }: VisitsPagePro
               </select>
             </label>
             <label className="field">
-              <span>Primary trade</span>
+              <span>Primary trade (optional)</span>
               <select name="primaryTradeId" disabled={!canEdit}>
                 <option value="">None</option>
                 {safeTrades.map((trade) => (
@@ -104,6 +104,10 @@ export default async function VisitsPage({ params, searchParams }: VisitsPagePro
               </select>
             </label>
           </div>
+          <p className="muted">
+            Leave both as None for general visits — measuring, demolition or anything spanning
+            several areas and trades.
+          </p>
           <label className="field">
             <span>General status</span>
             <input name="generalStatus" maxLength={240} disabled={!canEdit} />

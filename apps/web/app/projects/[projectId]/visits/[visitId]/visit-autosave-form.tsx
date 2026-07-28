@@ -215,7 +215,7 @@ export function VisitAutosaveForm({
 
       <div className="grid two">
         <label className="field">
-          <span>Primary zone</span>
+          <span>Primary zone (optional)</span>
           <select
             value={fields.primaryZoneId}
             onChange={(event) => setField("primaryZoneId", event.target.value)}
@@ -230,7 +230,7 @@ export function VisitAutosaveForm({
           </select>
         </label>
         <label className="field">
-          <span>Primary trade</span>
+          <span>Primary trade (optional)</span>
           <select
             value={fields.primaryTradeId}
             onChange={(event) => setField("primaryTradeId", event.target.value)}
@@ -245,6 +245,10 @@ export function VisitAutosaveForm({
           </select>
         </label>
       </div>
+      <p className="muted">
+        Leave both as None for general visits — measuring, demolition or anything spanning several
+        areas and trades.
+      </p>
 
       <label className="field">
         <span>General status</span>
