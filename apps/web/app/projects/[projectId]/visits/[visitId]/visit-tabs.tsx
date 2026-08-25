@@ -1,38 +1,44 @@
 "use client";
 
 import { useEffect, useId, useState, type ReactNode } from "react";
+import { Camera, CheckCircle2, MessageSquareText, type LucideIcon } from "lucide-react";
 
-type VisitTabId = "details" | "evidence" | "review";
+type VisitTabId = "update" | "files" | "finish";
 
 interface VisitTabsProps {
-  details: ReactNode;
-  evidence: ReactNode;
-  review: ReactNode;
+  update: ReactNode;
+  files: ReactNode;
+  finish: ReactNode;
 }
 
-const TABS: { id: VisitTabId; label: string }[] = [
-  { id: "details", label: "Details" },
-  { id: "evidence", label: "Evidence" },
-  { id: "review", label: "Review & publish" },
+const TABS: { id: VisitTabId; label: string; Icon: LucideIcon }[] = [
+  { id: "update", label: "Update", Icon: MessageSquareText },
+  { id: "files", label: "Photos & files", Icon: Camera },
+  { id: "finish", label: "Finish", Icon: CheckCircle2 },
 ];
 
 function tabFromHash(hash: string): VisitTabId {
   const cleanHash = hash.replace(/^#/, "");
-  if (cleanHash === "evidence" || cleanHash.startsWith("evidence-")) return "evidence";
+  if (cleanHash === "files" || cleanHash === "evidence" || cleanHash.startsWith("evidence-")) {
+    return "files";
+  }
   if (
+    cleanHash === "finish" ||
     cleanHash === "review" ||
+    cleanHash === "new-issue" ||
+    cleanHash === "new-decision" ||
     cleanHash.startsWith("issue-") ||
     cleanHash.startsWith("decision-")
   ) {
-    return "review";
+    return "finish";
   }
-  return "details";
+  return "update";
 }
 
-export function VisitTabs({ details, evidence, review }: VisitTabsProps) {
-  const [activeTab, setActiveTab] = useState<VisitTabId>("details");
+export function VisitTabs({ update, files, finish }: VisitTabsProps) {
+  const [activeTab, setActiveTab] = useState<VisitTabId>("update");
   const idPrefix = useId();
-  const panels: Record<VisitTabId, ReactNode> = { details, evidence, review };
+  const panels: Record<VisitTabId, ReactNode> = { update, files, finish };
 
   useEffect(() => {
     const syncTabFromHash = () => {
@@ -63,9 +69,10 @@ export function VisitTabs({ details, evidence, review }: VisitTabsProps) {
 
   return (
     <div className="visit-tabs">
-      <div className="tab-list" role="tablist" aria-label="Visit sections">
+      <div className="tab-list visit-step-list" role="tablist" aria-label="Site update steps">
         {TABS.map((tab) => {
           const selected = activeTab === tab.id;
+          const Icon = tab.Icon;
           return (
             <button
               key={tab.id}
@@ -77,6 +84,7 @@ export function VisitTabs({ details, evidence, review }: VisitTabsProps) {
               className={selected ? "tab-button active" : "tab-button"}
               onClick={() => selectTab(tab.id)}
             >
+              <Icon size={18} aria-hidden="true" />
               {tab.label}
             </button>
           );

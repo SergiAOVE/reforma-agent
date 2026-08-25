@@ -28,7 +28,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
         <header className="site-header">
           <div className="container">
             <Link href={user ? "/projects" : "/"} className="brand">
-              reforma-agent
+              Reforma
             </Link>
             {user ? (
               <div className="user-chip">

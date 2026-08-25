@@ -18,8 +18,48 @@ A phase is only marked as completed if the checks (lint, typecheck, test, build)
 - [x] **Phase 10 — Optional: Telegram gateway.**
 - [x] **Phase 11 — Optional: NanoClaw gateway.**
 - [x] **Phase 12 — Optional: document intelligence.**
+- [x] **Phase 13 — Stakeholders and responsibilities**: professional functions plus responsible
+      and approver assignments for issues and decisions.
+- [x] **Phase 14 — Site manager field workflow**: operator-first Today screen, resumable daily
+      drafts, simplified reporting steps and mobile navigation.
 
 ## Completed phases log
+
+### Phase 14 — 2026-08-18
+
+The first role-focused experience is now designed for the site manager working from a phone.
+Site-manager project links open a dedicated `Today` screen with one-tap start or resume behavior,
+quick paths for notes, bulk photos, problems and decision requests, a compact attention list and
+secondary access to advanced project tools. Starting from any shortcut reuses the current user's
+existing draft for that project and date, preventing accidental duplicate updates; the action
+uses the authenticated Supabase client and existing visit RLS. The visit UI now uses plain
+language (`Update`, `Photos & files`, `Finish`), keeps title/date/zone/trade behind optional
+details, autosaves notes after a short delay, keeps multi-file evidence upload, and replaces the
+three-way status control with one clear `Finish update` action. AI controls and AI drafts remain
+available but collapsed as advanced tools. The existing owner/reviewer dashboard and data model
+remain unchanged. Field view now persists for the browser-tab session across project routes,
+defaults on for site managers, keeps return links anchored to `Today`, and uses the same fixed
+four-item navigation on desktop and mobile. A Zod schema and focused tests cover operator shortcut
+destinations and field-navigation routing. Project start and deadline dates now drive a shallow,
+shared project timeline on every route, with visit, decision and weekly-summary milestones shown
+as secondary markers. A decision deadline is never treated as the project deadline.
+
+### Phase 13 — 2026-07-28
+
+Stakeholder responsibilities implemented without changing the existing authorization model.
+New migration `20260728162801_stakeholder_responsibilities.sql` adds the descriptive
+`stakeholder_type` enum to project memberships and optional responsible/approver assignments to
+issues and decisions. Composite foreign keys prevent cross-project assignments, indexed foreign
+keys keep assignment lookups and member removal efficient, and authenticated membership updates
+are limited to the descriptive stakeholder column. Project settings now distinguish permission
+from project function; issue and decision forms can assign accountable members and display those
+assignments on dashboards and visit review panels. Zod schemas, generated database types, seed
+data, tests, security documentation and ADR-0004 were updated. RLS continues to authorize only
+through owner/admin/editor/viewer roles; stakeholder functions never grant access.
+Dashboard issue and decision rows now expand in place, including records without a linked visit,
+with item-scoped save, approve, reject and close actions so users cannot accidentally act on a
+different visit record. Closed issues remain available in a collapsed project archive with
+read-only details, an explicit reopen action and corresponding audit history.
 
 ### Phase 12 — 2026-07-04
 

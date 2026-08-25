@@ -6,6 +6,7 @@ import type { Json } from "@reforma/db";
 import {
   createDecision,
   createIssue,
+  reopenIssue,
   reviewDecision,
   reviewIssue,
   reviewSummary,
@@ -29,6 +30,13 @@ interface VisitOption {
   id: string;
   title: string;
   visit_date: string;
+}
+
+interface ProjectMemberOption {
+  user_id: string;
+  role: string;
+  stakeholder_type: string;
+  profiles: { email: string; full_name: string | null } | null;
 }
 
 interface SummaryReviewVisit {
@@ -59,6 +67,8 @@ interface IssueReviewItem {
   zone_id: string | null;
   trade_id: string | null;
   contract_item_id?: string | null;
+  responsible_user_id: string | null;
+  approver_user_id: string | null;
   cost_risk: string | null;
   schedule_risk: string | null;
   zones?: { name: string } | null;
@@ -75,6 +85,8 @@ interface DecisionReviewItem {
   review_state: string;
   zone_id: string | null;
   trade_id: string | null;
+  responsible_user_id: string | null;
+  approver_user_id: string | null;
   deadline: string | null;
   options: Json | null;
   recommendation: string | null;
@@ -180,43 +192,144 @@ function VisitSelect({
   );
 }
 
+function stakeholderTypeLabel(value: string): string {
+  return value.replaceAll("_", " ");
+}
+
+function memberLabel(member: ProjectMemberOption): string {
+  const name = member.profiles?.full_name ?? member.profiles?.email ?? "Unknown member";
+  return `${name} | ${stakeholderTypeLabel(member.stakeholder_type)} | ${member.role}`;
+}
+
+function assignedMemberName(
+  members: ProjectMemberOption[],
+  userId: string | null | undefined,
+): string | null {
+  if (!userId) return null;
+  const member = members.find((candidate) => candidate.user_id === userId);
+  return member ? (member.profiles?.full_name ?? member.profiles?.email ?? null) : null;
+}
+
+function AssignmentSelects({
+  members,
+  defaults,
+  disabled,
+}: {
+  members: ProjectMemberOption[];
+  defaults: {
+    responsibleUserId?: string | null;
+    approverUserId?: string | null;
+  };
+  disabled: boolean;
+}) {
+  return (
+    <div className="grid two">
+      <label className="field">
+        <span>Responsible person</span>
+        <select
+          name="responsibleUserId"
+          defaultValue={defaults.responsibleUserId ?? ""}
+          disabled={disabled}
+        >
+          <option value="">Unassigned</option>
+          {members.map((member) => (
+            <option key={member.user_id} value={member.user_id}>
+              {memberLabel(member)}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="field">
+        <span>Approver</span>
+        <select
+          name="approverUserId"
+          defaultValue={defaults.approverUserId ?? ""}
+          disabled={disabled}
+        >
+          <option value="">Unassigned</option>
+          {members.map((member) => (
+            <option key={member.user_id} value={member.user_id}>
+              {memberLabel(member)}
+            </option>
+          ))}
+        </select>
+      </label>
+    </div>
+  );
+}
+
 export function CreateIssueForm({
   projectId,
   visits,
   zones,
   trades,
   contractItems,
+  members,
   canEdit,
+  defaults,
+  id,
+  summaryLabel = "Add issue",
+  submitLabel = "Create issue",
+  returnTo = "project",
 }: {
   projectId: string;
   visits: VisitOption[];
   zones: ReferenceOption[];
   trades: ReferenceOption[];
   contractItems: ContractItemOption[];
+  members: ProjectMemberOption[];
   canEdit: boolean;
+  defaults?: {
+    title?: string;
+    description?: string | null;
+    priority?: string;
+    visitId?: string | null;
+    zoneId?: string | null;
+    tradeId?: string | null;
+    contractItemId?: string | null;
+    responsibleUserId?: string | null;
+    approverUserId?: string | null;
+    costRisk?: string | null;
+    scheduleRisk?: string | null;
+  };
+  id?: string;
+  summaryLabel?: string;
+  submitLabel?: string;
+  returnTo?: ReturnTo;
 }) {
   if (!canEdit) {
     return <p className="muted">Your role is read-only here.</p>;
   }
 
   return (
-    <details className="compact-create-panel">
-      <summary>Add issue</summary>
+    <details className="compact-create-panel" id={id}>
+      <summary>{summaryLabel}</summary>
       <form action={createIssue} className="inline-edit compact-create-form">
         <input type="hidden" name="projectId" value={projectId} />
-        <input type="hidden" name="returnTo" value="project" />
+        <input type="hidden" name="returnTo" value={returnTo} />
         <label className="field">
           <span>Title</span>
-          <input name="title" required maxLength={220} placeholder="What needs attention?" />
+          <input
+            name="title"
+            required
+            maxLength={220}
+            placeholder="What needs attention?"
+            defaultValue={defaults?.title ?? ""}
+          />
         </label>
         <label className="field">
           <span>Description</span>
-          <textarea name="description" rows={3} maxLength={2000} />
+          <textarea
+            name="description"
+            rows={3}
+            maxLength={2000}
+            defaultValue={defaults?.description ?? ""}
+          />
         </label>
         <div className="grid two">
           <label className="field">
             <span>Priority</span>
-            <select name="priority" defaultValue="medium">
+            <select name="priority" defaultValue={defaults?.priority ?? "medium"}>
               {PRIORITIES.map((priority) => (
                 <option key={priority} value={priority}>
                   {priority}
@@ -224,12 +337,18 @@ export function CreateIssueForm({
               ))}
             </select>
           </label>
-          <VisitSelect visits={visits} disabled={false} />
+          <VisitSelect visits={visits} defaultValue={defaults?.visitId} disabled={false} />
         </div>
-        <ReferenceSelects zones={zones} trades={trades} defaults={{}} disabled={false} />
+        <ReferenceSelects
+          zones={zones}
+          trades={trades}
+          defaults={defaults ?? {}}
+          disabled={false}
+        />
+        <AssignmentSelects members={members} defaults={defaults ?? {}} disabled={false} />
         <label className="field">
           <span>Budget item</span>
-          <select name="contractItemId" defaultValue="">
+          <select name="contractItemId" defaultValue={defaults?.contractItemId ?? ""}>
             <option value="">None</option>
             {contractItems.map((item) => (
               <option key={item.id} value={item.id}>
@@ -242,14 +361,18 @@ export function CreateIssueForm({
         <div className="grid two">
           <label className="field">
             <span>Cost risk</span>
-            <input name="costRisk" maxLength={240} />
+            <input name="costRisk" maxLength={240} defaultValue={defaults?.costRisk ?? ""} />
           </label>
           <label className="field">
             <span>Schedule risk</span>
-            <input name="scheduleRisk" maxLength={240} />
+            <input
+              name="scheduleRisk"
+              maxLength={240}
+              defaultValue={defaults?.scheduleRisk ?? ""}
+            />
           </label>
         </div>
-        <button type="submit">Create issue</button>
+        <button type="submit">{submitLabel}</button>
       </form>
     </details>
   );
@@ -260,8 +383,10 @@ export function CreateDecisionForm({
   visits,
   zones,
   trades,
+  members,
   canEdit,
   defaults,
+  id,
   summaryLabel = "Add decision",
   submitLabel = "Create decision",
   returnTo = "project",
@@ -270,6 +395,7 @@ export function CreateDecisionForm({
   visits: VisitOption[];
   zones: ReferenceOption[];
   trades: ReferenceOption[];
+  members: ProjectMemberOption[];
   canEdit: boolean;
   defaults?: {
     title?: string;
@@ -278,9 +404,12 @@ export function CreateDecisionForm({
     visitId?: string | null;
     zoneId?: string | null;
     tradeId?: string | null;
+    responsibleUserId?: string | null;
+    approverUserId?: string | null;
     costImpact?: string | null;
     scheduleImpact?: string | null;
   };
+  id?: string;
   summaryLabel?: string;
   submitLabel?: string;
   returnTo?: ReturnTo;
@@ -290,7 +419,7 @@ export function CreateDecisionForm({
   }
 
   return (
-    <details className="compact-create-panel">
+    <details className="compact-create-panel" id={id}>
       <summary>{summaryLabel}</summary>
       <form action={createDecision} className="inline-edit compact-create-form">
         <input type="hidden" name="projectId" value={projectId} />
@@ -337,6 +466,7 @@ export function CreateDecisionForm({
           defaults={defaults ?? {}}
           disabled={false}
         />
+        <AssignmentSelects members={members} defaults={defaults ?? {}} disabled={false} />
         <label className="field">
           <span>Options</span>
           <textarea name="optionsText" rows={3} maxLength={2000} />
@@ -480,6 +610,7 @@ export function IssueReviewForm({
   zones,
   trades,
   contractItems,
+  members,
   canEdit,
   returnTo,
   mode = "review",
@@ -490,15 +621,18 @@ export function IssueReviewForm({
   zones: ReferenceOption[];
   trades: ReferenceOption[];
   contractItems: ContractItemOption[];
+  members: ProjectMemberOption[];
   canEdit: boolean;
   returnTo: ReturnTo;
-  mode?: "review" | "inspection";
+  mode?: "review" | "inspection" | "archive";
   showHeader?: boolean;
 }) {
   const showAiReviewActions = mode === "review";
+  const isArchived = mode === "archive";
+  const fieldsDisabled = !canEdit || isArchived;
 
   return (
-    <form action={reviewIssue} className="inline-edit">
+    <form action={isArchived ? reopenIssue : reviewIssue} className="inline-edit">
       <ReturnFields projectId={projectId} visitId={issue.visit_id} returnTo={returnTo} />
       <input type="hidden" name="issueId" value={issue.id} />
       {showHeader ? (
@@ -513,6 +647,37 @@ export function IssueReviewForm({
           <span className={`badge status-${issue.status}`}>{issue.status}</span>
         </div>
       ) : null}
+      <div className="workflow-action-bar">
+        <strong>
+          {showAiReviewActions ? "AI issue draft" : isArchived ? "Closed issue" : "Open issue"}
+        </strong>
+        <div className="workflow-action-buttons">
+          {isArchived ? (
+            <button type="submit" name="status" value="open" disabled={!canEdit}>
+              Reopen issue
+            </button>
+          ) : showAiReviewActions ? (
+            <>
+              <button type="submit" name="action" value="approve" disabled={!canEdit}>
+                Approve issue
+              </button>
+              <button
+                type="submit"
+                name="action"
+                value="reject"
+                className="danger"
+                disabled={!canEdit}
+              >
+                Reject draft
+              </button>
+            </>
+          ) : (
+            <button type="submit" name="action" value="close" disabled={!canEdit}>
+              Close issue
+            </button>
+          )}
+        </div>
+      </div>
       <label className="field">
         <span>Title</span>
         <input
@@ -520,7 +685,7 @@ export function IssueReviewForm({
           defaultValue={issue.title}
           required
           maxLength={220}
-          disabled={!canEdit}
+          disabled={fieldsDisabled}
         />
       </label>
       <label className="field">
@@ -530,13 +695,13 @@ export function IssueReviewForm({
           defaultValue={issue.description ?? ""}
           rows={3}
           maxLength={2000}
-          disabled={!canEdit}
+          disabled={fieldsDisabled}
         />
       </label>
       <div className="grid two">
         <label className="field">
           <span>Priority</span>
-          <select name="priority" defaultValue={issue.priority} disabled={!canEdit}>
+          <select name="priority" defaultValue={issue.priority} disabled={fieldsDisabled}>
             {PRIORITIES.map((priority) => (
               <option key={priority} value={priority}>
                 {priority}
@@ -549,7 +714,7 @@ export function IssueReviewForm({
           <select
             name="contractItemId"
             defaultValue={issue.contract_item_id ?? ""}
-            disabled={!canEdit}
+            disabled={fieldsDisabled}
           >
             <option value="">None</option>
             {contractItems.map((item) => (
@@ -565,36 +730,43 @@ export function IssueReviewForm({
         zones={zones}
         trades={trades}
         defaults={{ zoneId: issue.zone_id, tradeId: issue.trade_id }}
-        disabled={!canEdit}
+        disabled={fieldsDisabled}
+      />
+      <AssignmentSelects
+        members={members}
+        defaults={{
+          responsibleUserId: issue.responsible_user_id,
+          approverUserId: issue.approver_user_id,
+        }}
+        disabled={fieldsDisabled}
       />
       <div className="grid two">
         <label className="field">
           <span>Cost risk</span>
-          <input name="costRisk" defaultValue={issue.cost_risk ?? ""} disabled={!canEdit} />
+          <input name="costRisk" defaultValue={issue.cost_risk ?? ""} disabled={fieldsDisabled} />
         </label>
         <label className="field">
           <span>Schedule risk</span>
-          <input name="scheduleRisk" defaultValue={issue.schedule_risk ?? ""} disabled={!canEdit} />
+          <input
+            name="scheduleRisk"
+            defaultValue={issue.schedule_risk ?? ""}
+            disabled={fieldsDisabled}
+          />
         </label>
       </div>
-      <div className="button-row">
-        <button type="submit" name="action" value="edit" disabled={!canEdit}>
-          {mode === "inspection" ? "Save issue" : "Save edit"}
-        </button>
-        {showAiReviewActions ? (
-          <button type="submit" name="action" value="approve" disabled={!canEdit}>
-            Approve
+      {!isArchived ? (
+        <div className="button-row">
+          <button
+            type="submit"
+            name="action"
+            value="edit"
+            className="secondary"
+            disabled={!canEdit}
+          >
+            {showAiReviewActions ? "Save draft changes" : "Save changes"}
           </button>
-        ) : null}
-        <button type="submit" name="action" value="close" className="secondary" disabled={!canEdit}>
-          Close
-        </button>
-        {showAiReviewActions ? (
-          <button type="submit" name="action" value="reject" className="danger" disabled={!canEdit}>
-            Reject
-          </button>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
     </form>
   );
 }
@@ -602,22 +774,34 @@ export function IssueReviewForm({
 export function IssueInspectionPanel({
   projectId,
   issue,
-  visit,
+  visits,
   zones,
   trades,
   contractItems,
+  members,
   canEdit,
+  returnTo = "visit",
 }: {
   projectId: string;
   issue: IssueReviewItem;
-  visit: VisitOption;
+  visits: VisitOption[];
   zones: ReferenceOption[];
   trades: ReferenceOption[];
   contractItems: ContractItemOption[];
+  members: ProjectMemberOption[];
   canEdit: boolean;
+  returnTo?: ReturnTo;
 }) {
+  const linkedVisit = visits.find((visit) => visit.id === issue.visit_id);
+  const responsibleName = assignedMemberName(members, issue.responsible_user_id);
+  const approverName = assignedMemberName(members, issue.approver_user_id);
+  const isArchived = issue.status === "closed";
+
   return (
-    <details id={`issue-${issue.id}`} className="inspection-panel">
+    <details
+      id={`issue-${issue.id}`}
+      className={`inspection-panel${isArchived ? " archived" : ""}`}
+    >
       <summary>
         <div className="compact-status-row">
           <strong>{issue.title}</strong>
@@ -625,8 +809,11 @@ export function IssueInspectionPanel({
         </div>
         <p className="muted">
           {issue.priority}
+          {returnTo === "project" ? ` | ${linkedVisit?.title ?? "No visit"}` : ""}
           {issue.zones?.name ? ` | ${issue.zones.name}` : ""}
           {issue.trades?.name ? ` | ${issue.trades.name}` : ""}
+          {responsibleName ? ` | Responsible: ${responsibleName}` : ""}
+          {approverName ? ` | Approver: ${approverName}` : ""}
           {issue.cost_risk ? ` | ${issue.cost_risk}` : ""}
           {issue.schedule_risk ? ` | ${issue.schedule_risk}` : ""}
         </p>
@@ -638,39 +825,45 @@ export function IssueInspectionPanel({
           zones={zones}
           trades={trades}
           contractItems={contractItems}
+          members={members}
           canEdit={canEdit}
-          returnTo="visit"
-          mode="inspection"
+          returnTo={returnTo}
+          mode={isArchived ? "archive" : "inspection"}
           showHeader={false}
         />
-        <div className="inspection-actions">
-          <CreateDecisionForm
-            projectId={projectId}
-            visits={[visit]}
-            zones={zones}
-            trades={trades}
-            canEdit={canEdit}
-            defaults={{
-              title: issue.title,
-              description: issue.description,
-              priority: issue.priority,
-              visitId: visit.id,
-              zoneId: issue.zone_id,
-              tradeId: issue.trade_id,
-              costImpact: issue.cost_risk,
-              scheduleImpact: issue.schedule_risk,
-            }}
-            summaryLabel="Add related decision"
-            submitLabel="Create decision"
-            returnTo="visit"
-          />
-          <Link
-            className="button-link secondary"
-            href={`/projects/${projectId}/budget#add-budget-item`}
-          >
-            Add budget item
-          </Link>
-        </div>
+        {!isArchived ? (
+          <div className="inspection-actions">
+            <CreateDecisionForm
+              projectId={projectId}
+              visits={visits}
+              zones={zones}
+              trades={trades}
+              members={members}
+              canEdit={canEdit}
+              defaults={{
+                title: issue.title,
+                description: issue.description,
+                priority: issue.priority,
+                visitId: issue.visit_id,
+                zoneId: issue.zone_id,
+                tradeId: issue.trade_id,
+                responsibleUserId: issue.responsible_user_id,
+                approverUserId: issue.approver_user_id,
+                costImpact: issue.cost_risk,
+                scheduleImpact: issue.schedule_risk,
+              }}
+              summaryLabel="Add related decision"
+              submitLabel="Create decision"
+              returnTo={returnTo}
+            />
+            <Link
+              className="button-link secondary"
+              href={`/projects/${projectId}/budget#add-budget-item`}
+            >
+              Add budget item
+            </Link>
+          </div>
+        ) : null}
       </div>
     </details>
   );
@@ -681,6 +874,7 @@ export function DecisionReviewForm({
   decision,
   zones,
   trades,
+  members,
   canEdit,
   returnTo,
   mode = "review",
@@ -690,6 +884,7 @@ export function DecisionReviewForm({
   decision: DecisionReviewItem;
   zones: ReferenceOption[];
   trades: ReferenceOption[];
+  members: ProjectMemberOption[];
   canEdit: boolean;
   returnTo: ReturnTo;
   mode?: "review" | "inspection";
@@ -714,6 +909,35 @@ export function DecisionReviewForm({
           <span className={`badge status-${decision.status}`}>{decision.status}</span>
         </div>
       ) : null}
+      <div className="workflow-action-bar">
+        <strong>{showAiReviewActions ? "AI decision draft" : "Pending decision"}</strong>
+        <div className="workflow-action-buttons">
+          <button type="submit" name="action" value="approve" disabled={!canEdit}>
+            Approve decision
+          </button>
+          {showAiReviewActions ? (
+            <button
+              type="submit"
+              name="action"
+              value="reject"
+              className="danger"
+              disabled={!canEdit}
+            >
+              Reject draft
+            </button>
+          ) : (
+            <button
+              type="submit"
+              name="action"
+              value="close"
+              className="secondary"
+              disabled={!canEdit}
+            >
+              Close decision
+            </button>
+          )}
+        </div>
+      </div>
       <label className="field">
         <span>Title</span>
         <input
@@ -761,6 +985,14 @@ export function DecisionReviewForm({
         defaults={{ zoneId: decision.zone_id, tradeId: decision.trade_id }}
         disabled={!canEdit}
       />
+      <AssignmentSelects
+        members={members}
+        defaults={{
+          responsibleUserId: decision.responsible_user_id,
+          approverUserId: decision.approver_user_id,
+        }}
+        disabled={!canEdit}
+      />
       <label className="field">
         <span>Options</span>
         <textarea
@@ -796,20 +1028,9 @@ export function DecisionReviewForm({
         </label>
       </div>
       <div className="button-row">
-        <button type="submit" name="action" value="edit" disabled={!canEdit}>
-          {mode === "inspection" ? "Save decision" : "Save edit"}
+        <button type="submit" name="action" value="edit" className="secondary" disabled={!canEdit}>
+          {showAiReviewActions ? "Save draft changes" : "Save changes"}
         </button>
-        <button type="submit" name="action" value="approve" disabled={!canEdit}>
-          Approve
-        </button>
-        <button type="submit" name="action" value="close" className="secondary" disabled={!canEdit}>
-          Close
-        </button>
-        {showAiReviewActions ? (
-          <button type="submit" name="action" value="reject" className="danger" disabled={!canEdit}>
-            Reject
-          </button>
-        ) : null}
       </div>
     </form>
   );
@@ -820,14 +1041,21 @@ export function DecisionInspectionPanel({
   decision,
   zones,
   trades,
+  members,
   canEdit,
+  returnTo = "visit",
 }: {
   projectId: string;
   decision: DecisionReviewItem;
   zones: ReferenceOption[];
   trades: ReferenceOption[];
+  members: ProjectMemberOption[];
   canEdit: boolean;
+  returnTo?: ReturnTo;
 }) {
+  const responsibleName = assignedMemberName(members, decision.responsible_user_id);
+  const approverName = assignedMemberName(members, decision.approver_user_id);
+
   return (
     <details id={`decision-${decision.id}`} className="inspection-panel">
       <summary>
@@ -840,6 +1068,8 @@ export function DecisionInspectionPanel({
           {decision.deadline ? ` | Due ${decision.deadline}` : ""}
           {decision.zones?.name ? ` | ${decision.zones.name}` : ""}
           {decision.trades?.name ? ` | ${decision.trades.name}` : ""}
+          {responsibleName ? ` | Responsible: ${responsibleName}` : ""}
+          {approverName ? ` | Approver: ${approverName}` : ""}
           {decision.cost_impact ? ` | ${decision.cost_impact}` : ""}
           {decision.schedule_impact ? ` | ${decision.schedule_impact}` : ""}
         </p>
@@ -850,8 +1080,9 @@ export function DecisionInspectionPanel({
           decision={decision}
           zones={zones}
           trades={trades}
+          members={members}
           canEdit={canEdit}
-          returnTo="visit"
+          returnTo={returnTo}
           mode="inspection"
           showHeader={false}
         />

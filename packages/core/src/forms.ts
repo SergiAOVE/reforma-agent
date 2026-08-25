@@ -7,6 +7,7 @@ import {
   projectStatusSchema,
   prioritySchema,
   visitStatusSchema,
+  stakeholderTypeSchema,
 } from "./enums";
 import { isoDateSchema, nonEmptyStringSchema, uuidSchema } from "./validators";
 
@@ -36,6 +37,11 @@ const nullableUuidSchema = z
   .nullish()
   .transform((value) => (value ? value : null));
 
+const nullableIsoDateSchema = z
+  .union([isoDateSchema, z.literal("")])
+  .nullish()
+  .transform((value) => (value ? value : null));
+
 const nullableDecimalSchema = z.preprocess((value) => {
   if (value === null || value === undefined || value === "") return null;
   if (typeof value === "string") return Number(value.trim().replace(",", "."));
@@ -60,16 +66,34 @@ export const projectFormSchema = z.object({
 });
 export type ProjectFormInput = z.infer<typeof projectFormSchema>;
 
-export const projectSettingsSchema = projectFormSchema.extend({
-  status: projectStatusSchema,
-});
+export const projectSettingsSchema = projectFormSchema
+  .extend({
+    status: projectStatusSchema,
+    startDate: nullableIsoDateSchema,
+    deadlineDate: nullableIsoDateSchema,
+  })
+  .refine(
+    (value) =>
+      value.startDate === null || value.deadlineDate === null || value.startDate <= value.deadlineDate,
+    {
+      message: "Project deadline must be on or after the project start date.",
+      path: ["deadlineDate"],
+    },
+  );
 export type ProjectSettingsInput = z.infer<typeof projectSettingsSchema>;
 
 export const addMemberSchema = z.object({
   email: z.string().trim().email(),
   role: projectRoleSchema,
+  stakeholderType: stakeholderTypeSchema,
 });
 export type AddMemberInput = z.infer<typeof addMemberSchema>;
+
+export const updateMemberStakeholderSchema = z.object({
+  membershipId: uuidSchema,
+  stakeholderType: stakeholderTypeSchema,
+});
+export type UpdateMemberStakeholderInput = z.infer<typeof updateMemberStakeholderSchema>;
 
 export const zoneTradeFormSchema = z.object({
   name: nonEmptyStringSchema.max(120),
@@ -113,10 +137,22 @@ export const visitFormSchema = z.object({
 });
 export type VisitFormInput = z.infer<typeof visitFormSchema>;
 
+export const SITE_UPDATE_DESTINATIONS = ["update", "files", "issue", "decision"] as const;
+export const siteUpdateStartSchema = z.object({
+  projectId: uuidSchema,
+  destination: z.enum(SITE_UPDATE_DESTINATIONS).default("update"),
+});
+export type SiteUpdateStartInput = z.infer<typeof siteUpdateStartSchema>;
+
 export const visitStatusTransitionSchema = z.object({
   status: visitStatusSchema,
 });
 export type VisitStatusTransitionInput = z.infer<typeof visitStatusTransitionSchema>;
+
+export const issueStatusTransitionSchema = z.object({
+  status: z.enum(["open", "closed"]),
+});
+export type IssueStatusTransitionInput = z.infer<typeof issueStatusTransitionSchema>;
 
 export const evidenceMetadataSchema = z.object({
   type: evidenceTypeSchema,
@@ -172,6 +208,8 @@ export const issueReviewFormSchema = z.object({
   zoneId: nullableUuidSchema,
   tradeId: nullableUuidSchema,
   contractItemId: nullableUuidSchema,
+  responsibleUserId: nullableUuidSchema,
+  approverUserId: nullableUuidSchema,
   costRisk: shortOptionalTrimmedText,
   scheduleRisk: shortOptionalTrimmedText,
 });
@@ -192,6 +230,8 @@ export const decisionReviewFormSchema = z.object({
   priority: prioritySchema,
   zoneId: nullableUuidSchema,
   tradeId: nullableUuidSchema,
+  responsibleUserId: nullableUuidSchema,
+  approverUserId: nullableUuidSchema,
   deadline: z
     .union([isoDateSchema, z.literal("")])
     .nullish()

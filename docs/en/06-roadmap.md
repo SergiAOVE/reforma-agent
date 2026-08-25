@@ -16,6 +16,8 @@ Phase 9 — Deployment docs. Done.
 Phase 10 — Optional Telegram gateway. Done.
 Phase 11 — Optional NanoClaw gateway. Done.
 Phase 12 — Optional document intelligence. Done.
+Phase 13 — Stakeholder functions and issue/decision responsibilities. Done.
+Phase 14 — Site manager field workflow and simplified daily reporting. Done.
 ```
 
 ## Roadmap rules

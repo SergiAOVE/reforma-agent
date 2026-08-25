@@ -12,6 +12,7 @@ import {
   PROJECT_ROLES,
   PROJECT_STATUSES,
   REVIEW_STATES,
+  STAKEHOLDER_TYPES,
   VISIT_STATUSES,
   decisionStatusSchema,
   documentTypeSchema,
@@ -23,6 +24,7 @@ import {
   projectRoleSchema,
   projectStatusSchema,
   reviewStateSchema,
+  stakeholderTypeSchema,
   visitStatusSchema,
 } from "./enums";
 
@@ -31,6 +33,20 @@ import {
 describe("enum values mirror the SQL migration", () => {
   it("project_role", () => {
     expect(PROJECT_ROLES).toEqual(["owner", "admin", "editor", "viewer"]);
+  });
+
+  it("stakeholder_type", () => {
+    expect(STAKEHOLDER_TYPES).toEqual([
+      "customer",
+      "site_manager",
+      "architect",
+      "engineer",
+      "contractor",
+      "foreman",
+      "worker",
+      "consultant",
+      "other",
+    ]);
   });
 
   it("project_status", () => {
@@ -111,6 +127,7 @@ describe("enum values mirror the SQL migration", () => {
 describe("enum schemas accept members and reject unknown values", () => {
   const cases = [
     { schema: projectRoleSchema, valid: "owner" },
+    { schema: stakeholderTypeSchema, valid: "site_manager" },
     { schema: projectStatusSchema, valid: "active" },
     { schema: visitStatusSchema, valid: "draft" },
     { schema: evidenceTypeSchema, valid: "photo" },

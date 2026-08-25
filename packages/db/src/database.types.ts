@@ -278,6 +278,7 @@ export type Database = {
       };
       decisions: {
         Row: {
+          approver_user_id: string | null;
           cost_impact: string | null;
           created_at: string;
           created_by: string | null;
@@ -289,6 +290,7 @@ export type Database = {
           priority: Database["public"]["Enums"]["priority"];
           project_id: string;
           recommendation: string | null;
+          responsible_user_id: string | null;
           review_state: string;
           schedule_impact: string | null;
           source: string;
@@ -300,6 +302,7 @@ export type Database = {
           zone_id: string | null;
         };
         Insert: {
+          approver_user_id?: string | null;
           cost_impact?: string | null;
           created_at?: string;
           created_by?: string | null;
@@ -311,6 +314,7 @@ export type Database = {
           priority?: Database["public"]["Enums"]["priority"];
           project_id: string;
           recommendation?: string | null;
+          responsible_user_id?: string | null;
           review_state?: string;
           schedule_impact?: string | null;
           source?: string;
@@ -322,6 +326,7 @@ export type Database = {
           zone_id?: string | null;
         };
         Update: {
+          approver_user_id?: string | null;
           cost_impact?: string | null;
           created_at?: string;
           created_by?: string | null;
@@ -333,6 +338,7 @@ export type Database = {
           priority?: Database["public"]["Enums"]["priority"];
           project_id?: string;
           recommendation?: string | null;
+          responsible_user_id?: string | null;
           review_state?: string;
           schedule_impact?: string | null;
           source?: string;
@@ -344,6 +350,13 @@ export type Database = {
           zone_id?: string | null;
         };
         Relationships: [
+          {
+            foreignKeyName: "decisions_approver_project_member_fkey";
+            columns: ["project_id", "approver_user_id"];
+            isOneToOne: false;
+            referencedRelation: "project_members";
+            referencedColumns: ["project_id", "user_id"];
+          },
           {
             foreignKeyName: "decisions_created_by_fkey";
             columns: ["created_by"];
@@ -364,6 +377,13 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "projects";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "decisions_responsible_project_member_fkey";
+            columns: ["project_id", "responsible_user_id"];
+            isOneToOne: false;
+            referencedRelation: "project_members";
+            referencedColumns: ["project_id", "user_id"];
           },
           {
             foreignKeyName: "decisions_trade_id_fkey";
@@ -633,6 +653,7 @@ export type Database = {
       };
       issues: {
         Row: {
+          approver_user_id: string | null;
           contract_item_id: string | null;
           cost_risk: string | null;
           created_at: string;
@@ -642,6 +663,7 @@ export type Database = {
           id: string;
           priority: Database["public"]["Enums"]["priority"];
           project_id: string;
+          responsible_user_id: string | null;
           review_state: string;
           schedule_risk: string | null;
           source: string;
@@ -653,6 +675,7 @@ export type Database = {
           zone_id: string | null;
         };
         Insert: {
+          approver_user_id?: string | null;
           contract_item_id?: string | null;
           cost_risk?: string | null;
           created_at?: string;
@@ -662,6 +685,7 @@ export type Database = {
           id?: string;
           priority?: Database["public"]["Enums"]["priority"];
           project_id: string;
+          responsible_user_id?: string | null;
           review_state?: string;
           schedule_risk?: string | null;
           source?: string;
@@ -673,6 +697,7 @@ export type Database = {
           zone_id?: string | null;
         };
         Update: {
+          approver_user_id?: string | null;
           contract_item_id?: string | null;
           cost_risk?: string | null;
           created_at?: string;
@@ -682,6 +707,7 @@ export type Database = {
           id?: string;
           priority?: Database["public"]["Enums"]["priority"];
           project_id?: string;
+          responsible_user_id?: string | null;
           review_state?: string;
           schedule_risk?: string | null;
           source?: string;
@@ -693,6 +719,13 @@ export type Database = {
           zone_id?: string | null;
         };
         Relationships: [
+          {
+            foreignKeyName: "issues_approver_project_member_fkey";
+            columns: ["project_id", "approver_user_id"];
+            isOneToOne: false;
+            referencedRelation: "project_members";
+            referencedColumns: ["project_id", "user_id"];
+          },
           {
             foreignKeyName: "issues_contract_item_id_fkey";
             columns: ["contract_item_id"];
@@ -720,6 +753,13 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "projects";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "issues_responsible_project_member_fkey";
+            columns: ["project_id", "responsible_user_id"];
+            isOneToOne: false;
+            referencedRelation: "project_members";
+            referencedColumns: ["project_id", "user_id"];
           },
           {
             foreignKeyName: "issues_trade_id_fkey";
@@ -774,6 +814,7 @@ export type Database = {
           id: string;
           project_id: string;
           role: Database["public"]["Enums"]["project_role"];
+          stakeholder_type: Database["public"]["Enums"]["stakeholder_type"];
           updated_at: string;
           user_id: string;
         };
@@ -782,6 +823,7 @@ export type Database = {
           id?: string;
           project_id: string;
           role: Database["public"]["Enums"]["project_role"];
+          stakeholder_type?: Database["public"]["Enums"]["stakeholder_type"];
           updated_at?: string;
           user_id: string;
         };
@@ -790,6 +832,7 @@ export type Database = {
           id?: string;
           project_id?: string;
           role?: Database["public"]["Enums"]["project_role"];
+          stakeholder_type?: Database["public"]["Enums"]["stakeholder_type"];
           updated_at?: string;
           user_id?: string;
         };
@@ -815,9 +858,11 @@ export type Database = {
           address_label: string | null;
           created_at: string;
           created_by: string;
+          deadline_date: string | null;
           description: string | null;
           id: string;
           name: string;
+          start_date: string | null;
           status: Database["public"]["Enums"]["project_status"];
           updated_at: string;
         };
@@ -825,9 +870,11 @@ export type Database = {
           address_label?: string | null;
           created_at?: string;
           created_by: string;
+          deadline_date?: string | null;
           description?: string | null;
           id?: string;
           name: string;
+          start_date?: string | null;
           status?: Database["public"]["Enums"]["project_status"];
           updated_at?: string;
         };
@@ -835,9 +882,11 @@ export type Database = {
           address_label?: string | null;
           created_at?: string;
           created_by?: string;
+          deadline_date?: string | null;
           description?: string | null;
           id?: string;
           name?: string;
+          start_date?: string | null;
           status?: Database["public"]["Enums"]["project_status"];
           updated_at?: string;
         };
@@ -1126,6 +1175,7 @@ export type Database = {
           p_email: string;
           p_project_id: string;
           p_role: Database["public"]["Enums"]["project_role"];
+          p_stakeholder_type: Database["public"]["Enums"]["stakeholder_type"];
         };
         Returns: string;
       };
@@ -1214,6 +1264,16 @@ export type Database = {
       priority: "low" | "medium" | "high" | "critical";
       project_role: "owner" | "admin" | "editor" | "viewer";
       project_status: "active" | "paused" | "completed" | "archived";
+      stakeholder_type:
+        | "customer"
+        | "site_manager"
+        | "architect"
+        | "engineer"
+        | "contractor"
+        | "foreman"
+        | "worker"
+        | "consultant"
+        | "other";
       visit_status: "draft" | "published" | "archived";
     };
     CompositeTypes: {
@@ -1371,6 +1431,17 @@ export const Constants = {
       priority: ["low", "medium", "high", "critical"],
       project_role: ["owner", "admin", "editor", "viewer"],
       project_status: ["active", "paused", "completed", "archived"],
+      stakeholder_type: [
+        "customer",
+        "site_manager",
+        "architect",
+        "engineer",
+        "contractor",
+        "foreman",
+        "worker",
+        "consultant",
+        "other",
+      ],
       visit_status: ["draft", "published", "archived"],
     },
   },

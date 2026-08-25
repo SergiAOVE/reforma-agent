@@ -3,7 +3,12 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { addMemberSchema, projectSettingsSchema, uuidSchema } from "@reforma/core";
+import {
+  addMemberSchema,
+  projectSettingsSchema,
+  updateMemberStakeholderSchema,
+  uuidSchema,
+} from "@reforma/core";
 
 import { requireUser } from "../../../../lib/auth";
 
@@ -31,6 +36,8 @@ export async function updateProject(formData: FormData): Promise<void> {
     addressLabel: formData.get("addressLabel"),
     description: formData.get("description"),
     status: formData.get("status"),
+    startDate: formData.get("startDate"),
+    deadlineDate: formData.get("deadlineDate"),
   });
 
   if (!parsed.success) {
@@ -47,6 +54,8 @@ export async function updateProject(formData: FormData): Promise<void> {
       address_label: parsed.data.addressLabel,
       description: parsed.data.description,
       status: parsed.data.status,
+      start_date: parsed.data.startDate,
+      deadline_date: parsed.data.deadlineDate,
     })
     .eq("id", projectId)
     .select("id");
@@ -58,7 +67,7 @@ export async function updateProject(formData: FormData): Promise<void> {
     settingsRedirect(projectId, { error: "You do not have permission to update this project." });
   }
 
-  revalidatePath(`/projects/${projectId}`);
+  revalidatePath(`/projects/${projectId}`, "layout");
   settingsRedirect(projectId, { ok: "Project updated." });
 }
 
@@ -69,6 +78,7 @@ export async function addMember(formData: FormData): Promise<void> {
   const parsed = addMemberSchema.safeParse({
     email: formData.get("email"),
     role: formData.get("role"),
+    stakeholderType: formData.get("stakeholderType"),
   });
 
   if (!parsed.success) {
@@ -83,6 +93,7 @@ export async function addMember(formData: FormData): Promise<void> {
     p_project_id: projectId,
     p_email: parsed.data.email,
     p_role: parsed.data.role,
+    p_stakeholder_type: parsed.data.stakeholderType,
   });
 
   if (error) {
@@ -90,7 +101,74 @@ export async function addMember(formData: FormData): Promise<void> {
   }
 
   revalidatePath(`/projects/${projectId}`);
-  settingsRedirect(projectId, { ok: `Added ${parsed.data.email} as ${parsed.data.role}.` });
+  settingsRedirect(projectId, {
+    ok: `Added ${parsed.data.email} as ${parsed.data.role} (${parsed.data.stakeholderType.replaceAll("_", " ")}).`,
+  });
+}
+
+export async function updateMemberStakeholderType(formData: FormData): Promise<void> {
+  const projectId = requireProjectId(formData);
+  const parsed = updateMemberStakeholderSchema.safeParse({
+    membershipId: formData.get("membershipId"),
+    stakeholderType: formData.get("stakeholderType"),
+  });
+
+  if (!parsed.success) {
+    settingsRedirect(projectId, {
+      error: parsed.error.issues[0]?.message ?? "Invalid member function.",
+    });
+  }
+
+  const { supabase, user } = await requireUser();
+  const { data: currentMembership, error: currentError } = await supabase
+    .from("project_members")
+    .select("id, user_id, stakeholder_type")
+    .eq("id", parsed.data.membershipId)
+    .eq("project_id", projectId)
+    .maybeSingle();
+
+  if (currentError) {
+    settingsRedirect(projectId, { error: currentError.message });
+  }
+  if (!currentMembership) {
+    settingsRedirect(projectId, { error: "Member not found." });
+  }
+
+  const { data, error } = await supabase
+    .from("project_members")
+    .update({ stakeholder_type: parsed.data.stakeholderType })
+    .eq("id", parsed.data.membershipId)
+    .eq("project_id", projectId)
+    .select("id");
+
+  if (error) {
+    settingsRedirect(projectId, { error: error.message });
+  }
+  if (!data || data.length === 0) {
+    settingsRedirect(projectId, {
+      error: "You do not have permission to update this member's project function.",
+    });
+  }
+
+  const { error: auditError } = await supabase.from("audit_log").insert({
+    project_id: projectId,
+    actor_user_id: user.id,
+    action: "member.stakeholder_type_updated",
+    entity_type: "project_member",
+    entity_id: parsed.data.membershipId,
+    metadata: {
+      user_id: currentMembership.user_id,
+      previous_stakeholder_type: currentMembership.stakeholder_type,
+      new_stakeholder_type: parsed.data.stakeholderType,
+    },
+  });
+
+  if (auditError) {
+    settingsRedirect(projectId, { error: auditError.message });
+  }
+
+  revalidatePath(`/projects/${projectId}`);
+  settingsRedirect(projectId, { ok: "Member project function updated." });
 }
 
 export async function removeMember(formData: FormData): Promise<void> {
@@ -108,7 +186,7 @@ export async function removeMember(formData: FormData): Promise<void> {
     .delete()
     .eq("id", membershipParsed.data)
     .eq("project_id", projectId)
-    .select("id, user_id, role");
+    .select("id, user_id, role, stakeholder_type");
 
   if (error) {
     settingsRedirect(projectId, { error: error.message });
@@ -124,7 +202,11 @@ export async function removeMember(formData: FormData): Promise<void> {
     action: "member.removed",
     entity_type: "project_member",
     entity_id: membershipParsed.data,
-    metadata: { removed_user_id: removed?.user_id, role: removed?.role },
+    metadata: {
+      removed_user_id: removed?.user_id,
+      role: removed?.role,
+      stakeholder_type: removed?.stakeholder_type,
+    },
   });
 
   if (auditError) {

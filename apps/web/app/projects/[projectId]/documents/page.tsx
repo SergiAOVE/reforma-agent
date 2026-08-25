@@ -1,9 +1,8 @@
-import Link from "next/link";
-
 import { groupDocumentUploads, type UploadDocumentRecord } from "@reforma/core";
 
 import { loadProjectAccess } from "../../../../lib/project-access";
 import { PROJECT_DOCUMENTS_BUCKET } from "../../../../lib/storage";
+import { ProjectBackLink } from "../project-view-shell";
 import { DocumentMetadataForm } from "./document-metadata-form";
 import { DocumentUploadPanel } from "./document-upload-panel";
 
@@ -70,7 +69,11 @@ export default async function DocumentsPage({ params, searchParams }: DocumentsP
   return (
     <>
       <p>
-        <Link href={`/projects/${project.id}`}>← {project.name}</Link>
+        <ProjectBackLink
+          projectId={project.id}
+          fallbackHref={`/projects/${project.id}`}
+          fallbackLabel={project.name}
+        />
       </p>
       <div className="page-title">
         <div>

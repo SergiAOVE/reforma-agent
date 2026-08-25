@@ -1,3 +1,4 @@
+import { HardHat } from "lucide-react";
 import Link from "next/link";
 
 import { loadProjectAccess } from "../../../lib/project-access";
@@ -5,7 +6,9 @@ import { enqueueWeeklySummary } from "./review-actions";
 import {
   CreateDecisionForm,
   CreateIssueForm,
+  DecisionInspectionPanel,
   DecisionReviewForm,
+  IssueInspectionPanel,
   IssueReviewForm,
   SummaryReviewForm,
   WeeklySummaryReviewForm,
@@ -19,172 +22,8 @@ interface ProjectPageProps {
 const OPEN_ISSUE_STATUSES = ["open", "in_review", "waiting_builder", "waiting_owner"] as const;
 const REVIEW_STATES = ["ai_draft", "edited"] as const;
 
-interface TimelineMilestone {
-  date: string;
-  label: string;
-  kind: "visit" | "decision" | "summary";
-}
-
 function toIsoDate(date: Date): string {
   return date.toISOString().slice(0, 10);
-}
-
-function parseTimelineDate(value: string): Date {
-  return new Date(`${value.slice(0, 10)}T00:00:00.000Z`);
-}
-
-function formatTimelineDate(value: string): string {
-  return new Intl.DateTimeFormat("en-US", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    timeZone: "UTC",
-  }).format(parseTimelineDate(value));
-}
-
-function formatTimelineMonth(value: string): string {
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    timeZone: "UTC",
-  }).format(parseTimelineDate(value));
-}
-
-function timelinePosition(value: string, start: string, end: string): number {
-  const startTime = parseTimelineDate(start).getTime();
-  const endTime = parseTimelineDate(end).getTime();
-  const currentTime = parseTimelineDate(value).getTime();
-  const range = Math.max(endTime - startTime, 1);
-  return Math.min(100, Math.max(0, ((currentTime - startTime) / range) * 100));
-}
-
-function addDays(value: string, days: number): string {
-  const date = parseTimelineDate(value);
-  date.setUTCDate(date.getUTCDate() + days);
-  return toIsoDate(date);
-}
-
-function timelineMonthTicks(start: string, end: string): string[] {
-  const ticks: string[] = [];
-  const startDate = parseTimelineDate(start);
-  const endDate = parseTimelineDate(end);
-  const cursor = new Date(Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth(), 1));
-
-  while (cursor <= endDate) {
-    const tick = toIsoDate(cursor);
-    ticks.push(tick < start ? start : tick);
-    cursor.setUTCMonth(cursor.getUTCMonth() + 1);
-  }
-
-  return Array.from(new Set(ticks));
-}
-
-function buildTimelineRange({
-  projectCreatedAt,
-  today,
-  milestones,
-}: {
-  projectCreatedAt?: string;
-  today: string;
-  milestones: TimelineMilestone[];
-}): { start: string; end: string; deadlineLabel: string } {
-  const milestoneDates = milestones.map((milestone) => milestone.date);
-  const start = [projectCreatedAt?.slice(0, 10), ...milestoneDates]
-    .filter((value): value is string => Boolean(value))
-    .sort()[0];
-  const decisionDeadlines = milestones
-    .filter((milestone) => milestone.kind === "decision")
-    .map((milestone) => milestone.date)
-    .sort();
-  const explicitDeadline = decisionDeadlines.at(-1);
-  const latestMilestone = milestoneDates.sort().at(-1);
-  const safeStart = start ?? today;
-  const endCandidates = explicitDeadline
-    ? [explicitDeadline, latestMilestone, today]
-    : [latestMilestone, today, addDays(safeStart, 30)];
-  const end = endCandidates
-    .filter((value): value is string => Boolean(value))
-    .sort()
-    .at(-1);
-
-  return {
-    start: safeStart,
-    end: end ?? today,
-    deadlineLabel: explicitDeadline ? "Deadline" : "Latest date",
-  };
-}
-
-function ProjectTimeline({
-  start,
-  end,
-  today,
-  deadlineLabel,
-  milestones,
-}: {
-  start: string;
-  end: string;
-  today: string;
-  deadlineLabel: string;
-  milestones: TimelineMilestone[];
-}) {
-  const months = timelineMonthTicks(start, end);
-  const todayPosition = timelinePosition(today, start, end);
-
-  return (
-    <section className="project-timeline" aria-label="Project timeline">
-      <div className="project-timeline-header">
-        <div>
-          <span className="timeline-label">Start</span>
-          <strong>{formatTimelineDate(start)}</strong>
-        </div>
-        <div className="timeline-today-label">
-          <span className="timeline-label">Today</span>
-          <strong>{formatTimelineDate(today)}</strong>
-        </div>
-        <div>
-          <span className="timeline-label">{deadlineLabel}</span>
-          <strong>{formatTimelineDate(end)}</strong>
-        </div>
-      </div>
-
-      <div
-        className="project-timeline-track"
-        role="img"
-        aria-label={`Timeline from ${formatTimelineDate(start)} to ${formatTimelineDate(
-          end,
-        )}. Today is ${formatTimelineDate(today)}.`}
-      >
-        <div className="project-timeline-line" />
-        <div className="project-timeline-progress" style={{ width: `${todayPosition}%` }} />
-        <span className="project-timeline-end start" aria-hidden="true" />
-        <span className="project-timeline-end finish" aria-hidden="true" />
-        <span
-          className="project-timeline-today"
-          style={{ left: `${todayPosition}%` }}
-          aria-hidden="true"
-        />
-        {milestones.map((milestone) => (
-          <span
-            key={`${milestone.kind}-${milestone.date}-${milestone.label}`}
-            className={`project-timeline-milestone ${milestone.kind}`}
-            style={{ left: `${timelinePosition(milestone.date, start, end)}%` }}
-            title={`${milestone.label} - ${formatTimelineDate(milestone.date)}`}
-            aria-hidden="true"
-          />
-        ))}
-        <div className="project-timeline-months" aria-hidden="true">
-          {months.map((month) => (
-            <span
-              key={month}
-              style={{ left: `${timelinePosition(month, start, end)}%` }}
-              className="project-timeline-month"
-            >
-              {formatTimelineMonth(month)}
-            </span>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
 }
 
 function defaultWeeklySummaryRange(): { weekStart: string; weekEnd: string } {
@@ -211,6 +50,7 @@ export default async function ProjectPage({ params, searchParams }: ProjectPageP
     { count: evidenceCount },
     { data: visits },
     { data: openIssues },
+    { data: closedIssues },
     { data: pendingDecisions },
     { data: summaryDrafts },
     { data: weeklySummaryDrafts },
@@ -222,13 +62,11 @@ export default async function ProjectPage({ params, searchParams }: ProjectPageP
     { data: zones },
     { data: trades },
     { data: contractItems },
-    { data: timelineVisits },
-    { data: timelineDecisions },
-    { data: timelineWeeklySummaries },
+    { data: visitOptions },
   ] = await Promise.all([
     supabase
       .from("project_members")
-      .select("id, role, user_id, profiles(email, full_name)")
+      .select("id, role, stakeholder_type, user_id, profiles(email, full_name)")
       .eq("project_id", project.id)
       .order("created_at"),
     supabase
@@ -263,14 +101,26 @@ export default async function ProjectPage({ params, searchParams }: ProjectPageP
       .limit(5),
     supabase
       .from("issues")
-      .select("id, visit_id, title, priority, status, updated_at, visits(id, title)")
+      .select(
+        "id, visit_id, title, description, priority, status, review_state, zone_id, trade_id, contract_item_id, responsible_user_id, approver_user_id, cost_risk, schedule_risk, updated_at, zones(name), trades(name), visits(id, title)",
+      )
       .eq("project_id", project.id)
       .in("status", [...OPEN_ISSUE_STATUSES])
       .order("updated_at", { ascending: false })
       .limit(8),
     supabase
+      .from("issues")
+      .select(
+        "id, visit_id, title, description, priority, status, review_state, zone_id, trade_id, contract_item_id, responsible_user_id, approver_user_id, cost_risk, schedule_risk, updated_at, zones(name), trades(name), visits(id, title)",
+      )
+      .eq("project_id", project.id)
+      .eq("status", "closed")
+      .order("updated_at", { ascending: false }),
+    supabase
       .from("decisions")
-      .select("id, visit_id, title, priority, status, deadline, updated_at, visits(id, title)")
+      .select(
+        "id, visit_id, title, description, priority, status, review_state, zone_id, trade_id, responsible_user_id, approver_user_id, deadline, options, recommendation, cost_impact, schedule_impact, updated_at, zones(name), trades(name), visits(id, title)",
+      )
       .eq("project_id", project.id)
       .eq("status", "pending")
       .order("deadline", { ascending: true, nullsFirst: false })
@@ -295,7 +145,7 @@ export default async function ProjectPage({ params, searchParams }: ProjectPageP
     supabase
       .from("issues")
       .select(
-        "id, visit_id, title, description, priority, status, review_state, zone_id, trade_id, contract_item_id, cost_risk, schedule_risk, zones(name), trades(name)",
+        "id, visit_id, title, description, priority, status, review_state, zone_id, trade_id, contract_item_id, responsible_user_id, approver_user_id, cost_risk, schedule_risk, zones(name), trades(name)",
       )
       .eq("project_id", project.id)
       .eq("source", "ai")
@@ -305,7 +155,7 @@ export default async function ProjectPage({ params, searchParams }: ProjectPageP
     supabase
       .from("decisions")
       .select(
-        "id, visit_id, title, description, priority, status, review_state, zone_id, trade_id, deadline, options, recommendation, cost_impact, schedule_impact, zones(name), trades(name)",
+        "id, visit_id, title, description, priority, status, review_state, zone_id, trade_id, responsible_user_id, approver_user_id, deadline, options, recommendation, cost_impact, schedule_impact, zones(name), trades(name)",
       )
       .eq("project_id", project.id)
       .eq("source", "ai")
@@ -344,26 +194,14 @@ export default async function ProjectPage({ params, searchParams }: ProjectPageP
       .from("visits")
       .select("id, title, visit_date, status")
       .eq("project_id", project.id)
-      .order("visit_date", { ascending: true })
-      .limit(12),
-    supabase
-      .from("decisions")
-      .select("id, title, deadline, status")
-      .eq("project_id", project.id)
-      .not("deadline", "is", null)
-      .order("deadline", { ascending: true })
-      .limit(12),
-    supabase
-      .from("weekly_summaries")
-      .select("id, title, week_start, week_end, review_state")
-      .eq("project_id", project.id)
-      .order("week_start", { ascending: true })
-      .limit(8),
+      .order("visit_date", { ascending: false })
+      .limit(20),
   ]);
 
   const safeMembers = members ?? [];
   const safeVisits = visits ?? [];
   const safeOpenIssues = openIssues ?? [];
+  const safeClosedIssues = closedIssues ?? [];
   const safePendingDecisions = pendingDecisions ?? [];
   const safeSummaryDrafts = summaryDrafts ?? [];
   const safeWeeklySummaryDrafts = weeklySummaryDrafts ?? [];
@@ -375,40 +213,12 @@ export default async function ProjectPage({ params, searchParams }: ProjectPageP
   const safeZones = zones ?? [];
   const safeTrades = trades ?? [];
   const safeContractItems = contractItems ?? [];
-  const safeTimelineVisits = timelineVisits ?? [];
-  const safeTimelineDecisions = timelineDecisions ?? [];
-  const safeTimelineWeeklySummaries = timelineWeeklySummaries ?? [];
+  const safeVisitOptions = visitOptions ?? [];
   const aiDraftCount =
     safeSummaryDrafts.length +
     safeWeeklySummaryDrafts.length +
     safeIssueDrafts.length +
     safeDecisionDrafts.length;
-  const today = toIsoDate(new Date());
-  const timelineMilestones: TimelineMilestone[] = [
-    ...safeTimelineVisits.map((visit) => ({
-      date: visit.visit_date,
-      label: visit.title,
-      kind: "visit" as const,
-    })),
-    ...safeTimelineDecisions
-      .filter((decision) => Boolean(decision.deadline))
-      .map((decision) => ({
-        date: decision.deadline!,
-        label: decision.title,
-        kind: "decision" as const,
-      })),
-    ...safeTimelineWeeklySummaries.map((summary) => ({
-      date: summary.week_end,
-      label: summary.title,
-      kind: "summary" as const,
-    })),
-  ].sort((a, b) => a.date.localeCompare(b.date));
-  const timelineRange = buildTimelineRange({
-    projectCreatedAt: project.created_at,
-    today,
-    milestones: timelineMilestones,
-  });
-
   return (
     <>
       <div className="page-title">
@@ -416,22 +226,19 @@ export default async function ProjectPage({ params, searchParams }: ProjectPageP
           <h1>{project.name}</h1>
           {project.address_label ? <p className="muted">{project.address_label}</p> : null}
         </div>
-        <div>
-          <span className="badge">{project.status}</span>{" "}
+        <div className="project-title-actions">
+          {canEdit ? (
+            <Link href={`/projects/${project.id}/today`} className="button-link secondary compact">
+              <HardHat size={17} aria-hidden="true" /> Field view
+            </Link>
+          ) : null}
+          <span className="badge">{project.status}</span>
           <span className={`badge role-${role}`}>{role}</span>
         </div>
       </div>
       {project.description ? <p>{project.description}</p> : null}
       {error ? <p className="notice error">{error}</p> : null}
       {ok ? <p className="notice ok">{ok}</p> : null}
-
-      <ProjectTimeline
-        start={timelineRange.start}
-        end={timelineRange.end}
-        today={today}
-        deadlineLabel={timelineRange.deadlineLabel}
-        milestones={timelineMilestones}
-      />
 
       <div className="grid three">
         <div className="card">
@@ -571,35 +378,32 @@ export default async function ProjectPage({ params, searchParams }: ProjectPageP
           <h2>Open issues</h2>
           <CreateIssueForm
             projectId={project.id}
-            visits={safeTimelineVisits}
+            visits={safeVisitOptions}
             zones={safeZones}
             trades={safeTrades}
             contractItems={safeContractItems}
+            members={safeMembers}
             canEdit={canEdit}
           />
           {safeOpenIssues.length === 0 ? (
             <p className="muted">No open issues.</p>
           ) : (
             <ul className="stack-list compact-stack-list">
-              {safeOpenIssues.map((issue) => {
-                const href = issue.visit_id
-                  ? `/projects/${project.id}/visits/${issue.visit_id}#issue-${issue.id}`
-                  : `#open-issues`;
-
-                return (
-                  <li key={issue.id} className="stack-item">
-                    <Link className="dashboard-item-link" href={href}>
-                      <div className="compact-status-row">
-                        <strong>{issue.title}</strong>
-                        <span className={`badge status-${issue.status}`}>{issue.status}</span>
-                      </div>
-                      <p className="muted">
-                        {issue.priority} | {issue.visits?.title ?? "No visit"}
-                      </p>
-                    </Link>
-                  </li>
-                );
-              })}
+              {safeOpenIssues.map((issue) => (
+                <li key={issue.id} className="stack-item">
+                  <IssueInspectionPanel
+                    projectId={project.id}
+                    issue={issue}
+                    visits={safeVisitOptions}
+                    zones={safeZones}
+                    trades={safeTrades}
+                    contractItems={safeContractItems}
+                    members={safeMembers}
+                    canEdit={canEdit}
+                    returnTo="project"
+                  />
+                </li>
+              ))}
             </ul>
           )}
         </section>
@@ -608,39 +412,66 @@ export default async function ProjectPage({ params, searchParams }: ProjectPageP
           <h2>Pending decisions</h2>
           <CreateDecisionForm
             projectId={project.id}
-            visits={safeTimelineVisits}
+            visits={safeVisitOptions}
             zones={safeZones}
             trades={safeTrades}
+            members={safeMembers}
             canEdit={canEdit}
           />
           {safePendingDecisions.length === 0 ? (
             <p className="muted">No pending decisions.</p>
           ) : (
             <ul className="stack-list compact-stack-list">
-              {safePendingDecisions.map((decision) => {
-                const href = decision.visit_id
-                  ? `/projects/${project.id}/visits/${decision.visit_id}#decision-${decision.id}`
-                  : `#pending-decisions`;
-
-                return (
-                  <li key={decision.id} className="stack-item">
-                    <Link className="dashboard-item-link" href={href}>
-                      <div className="compact-status-row">
-                        <strong>{decision.title}</strong>
-                        <span className={`badge status-${decision.status}`}>{decision.status}</span>
-                      </div>
-                      <p className="muted">
-                        {decision.priority} | {decision.visits?.title ?? "No visit"}
-                        {decision.deadline ? ` | ${decision.deadline}` : ""}
-                      </p>
-                    </Link>
-                  </li>
-                );
-              })}
+              {safePendingDecisions.map((decision) => (
+                <li key={decision.id} className="stack-item">
+                  <DecisionInspectionPanel
+                    projectId={project.id}
+                    decision={decision}
+                    zones={safeZones}
+                    trades={safeTrades}
+                    members={safeMembers}
+                    canEdit={canEdit}
+                    returnTo="project"
+                  />
+                </li>
+              ))}
             </ul>
           )}
         </section>
       </div>
+
+      <details className="card archive-section" id="closed-issues">
+        <summary className="archive-summary">
+          <span>
+            <strong>Closed issues</strong>
+            <span className="muted">Completed issue history</span>
+          </span>
+          <span className="badge">{safeClosedIssues.length}</span>
+        </summary>
+        <div className="archive-body">
+          {safeClosedIssues.length === 0 ? (
+            <p className="muted">No closed issues.</p>
+          ) : (
+            <ul className="stack-list compact-stack-list">
+              {safeClosedIssues.map((issue) => (
+                <li key={issue.id} className="stack-item">
+                  <IssueInspectionPanel
+                    projectId={project.id}
+                    issue={issue}
+                    visits={safeVisitOptions}
+                    zones={safeZones}
+                    trades={safeTrades}
+                    contractItems={safeContractItems}
+                    members={safeMembers}
+                    canEdit={canEdit}
+                    returnTo="project"
+                  />
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </details>
 
       <section className="card">
         <h2>AI review queue</h2>
@@ -693,6 +524,7 @@ export default async function ProjectPage({ params, searchParams }: ProjectPageP
                     zones={safeZones}
                     trades={safeTrades}
                     contractItems={safeContractItems}
+                    members={safeMembers}
                     canEdit={canEdit}
                     returnTo="project"
                   />
@@ -713,6 +545,7 @@ export default async function ProjectPage({ params, searchParams }: ProjectPageP
                     decision={decision}
                     zones={safeZones}
                     trades={safeTrades}
+                    members={safeMembers}
                     canEdit={canEdit}
                     returnTo="project"
                   />
@@ -734,7 +567,12 @@ export default async function ProjectPage({ params, searchParams }: ProjectPageP
                   {member.user_id === user.id ? <span className="muted"> (you)</span> : null}
                   <div className="muted">{member.profiles?.email}</div>
                 </div>
-                <span className={`badge role-${member.role}`}>{member.role}</span>
+                <div className="button-row">
+                  <span className={`badge role-${member.role}`}>{member.role}</span>
+                  <span className="badge stakeholder-badge">
+                    {member.stakeholder_type.replaceAll("_", " ")}
+                  </span>
+                </div>
               </li>
             ))}
           </ul>

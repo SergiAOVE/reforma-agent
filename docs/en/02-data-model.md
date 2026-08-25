@@ -1,6 +1,6 @@
 # Data model
 
-> Status: **implemented through Phase 12**. Source of truth:
+> Status: **implemented through Phase 14**. Source of truth:
 > [supabase/migrations/](../../supabase/migrations/) — enums, tables and RLS are fully
 > commented there. TypeScript mirrors live in
 > [packages/core/src/enums.ts](../../packages/core/src/enums.ts); form and CSV validators live in
@@ -11,8 +11,8 @@
 | Table                  | Purpose                                                     |
 | ---------------------- | ----------------------------------------------------------- |
 | `profiles`             | User profile linked to `auth.users`                         |
-| `projects`             | Renovation project                                          |
-| `project_members`      | Memberships and roles per project (basis for RLS policies)  |
+| `projects`             | Renovation project, including optional start and deadline   |
+| `project_members`      | Memberships, permission roles and stakeholder functions     |
 | `zones`                | Zones/rooms (kitchen, main bathroom, living room…)          |
 | `trades`               | Trades (electrical, plumbing, carpentry…)                   |
 | `visits`               | Site visits                                                 |
@@ -32,6 +32,7 @@
 Defined in `20260702120000_create_enums.sql` and mirrored in `packages/core`:
 
 - `project_role`: owner, admin, editor, viewer
+- `stakeholder_type`: customer, site_manager, architect, engineer, contractor, foreman, worker, consultant, other
 - `project_status`: active, paused, completed, archived
 - `visit_status`: draft, published, archived
 - `evidence_type`: photo, audio, video, document
@@ -65,6 +66,8 @@ erDiagram
     evidence ||--o{ audio_transcriptions : "if audio"
     visits ||--o{ issues : ""
     visits ||--o{ decisions : ""
+    project_members o|--o{ issues : "responsible or approver"
+    project_members o|--o{ decisions : "responsible or approver"
     projects ||--o{ weekly_summaries : ""
     documents ||--o{ document_insights : ""
     documents ||--o{ contract_items : "source"
@@ -75,15 +78,23 @@ erDiagram
     agent_jobs ||--o{ document_insights : "created by"
 ```
 
+## Project timeline
+
+`projects.start_date` and `projects.deadline_date` are optional project-level planning dates.
+They are validated so the deadline cannot precede the start date. The shared timeline uses the
+creation date only as a labelled fallback when a start date has not yet been entered, and it never
+uses an issue or decision deadline as the project deadline. Existing `projects` RLS policies apply
+to both columns; no additional data access path was introduced.
+
 ## SQL functions (RPC)
 
 Implemented RPCs:
 
-| Function                                            | Caller      | Purpose                                             |
-| --------------------------------------------------- | ----------- | --------------------------------------------------- |
-| `create_project_with_owner(name, label?, desc?)`    | Web app     | Project + owner membership in one transaction       |
-| `add_project_member_by_email(project, email, role)` | Web app     | Owner/admin adds an existing user, audit-logged     |
-| `claim_agent_job(worker, types, stale_after)`       | Worker only | Atomically claims pending/stale jobs with row locks |
+| Function                                                              | Caller      | Purpose                                             |
+| --------------------------------------------------------------------- | ----------- | --------------------------------------------------- |
+| `create_project_with_owner(name, label?, desc?)`                      | Web app     | Project + owner membership in one transaction       |
+| `add_project_member_by_email(project, email, role, stakeholder_type)` | Web app     | Owner/admin adds an existing user, audit-logged     |
+| `claim_agent_job(worker, types, stale_after)`                         | Worker only | Atomically claims pending/stale jobs with row locks |
 
 ## Storage
 
@@ -206,6 +217,21 @@ reviewable drafts generated only by the worker:
 - Project members can read insights. Owner/admin/editor roles can update/review them through
   normal RLS-scoped future actions. Authenticated clients cannot insert or delete insights.
 
+## Phase 13 stakeholders and responsibilities
+
+- `project_members.role` remains the only permission-bearing value used by RLS.
+- `project_members.stakeholder_type` records the person's real project function: customer, site
+  manager, architect, engineer, contractor, foreman, worker, consultant or other.
+- Project creators default to customer; existing memberships migrate to other instead of being
+  assigned a professional function without evidence.
+- Owners and admins can update stakeholder type in project settings. Direct authenticated
+  updates to membership identity or permission-role columns are not granted.
+- `issues` and `decisions` have optional `responsible_user_id` and `approver_user_id` fields.
+  Composite foreign keys ensure both people are members of the same project.
+- Removing a project member clears their assignments while preserving the issue or decision.
+- Assignment changes are validated with Zod and included in audit metadata. They describe
+  accountability but do not grant extra permissions.
+
 ## Design notes
 
 - **Every project data table carries `project_id`** with `on delete cascade`: deleting a project
@@ -228,6 +254,8 @@ reviewable drafts generated only by the worker:
   `FOR UPDATE SKIP LOCKED` in `claim_agent_job()`.
 - **Data minimization**: `projects.address_label` is a label ("Barcelona flat"), not a full
   postal address.
+- **Authorization and responsibility are separate**: `project_role` controls access;
+  `stakeholder_type`, responsible person and approver describe project accountability.
 - Nullable references (`zone_id`, `trade_id`, `visit_id`, …) use `on delete set null` so deleting
   a zone or trade never destroys visits or evidence.
 - Zone and trade names are case-insensitively unique inside each project. This prevents ambiguous

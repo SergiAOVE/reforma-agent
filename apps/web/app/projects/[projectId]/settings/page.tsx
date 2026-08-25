@@ -1,45 +1,50 @@
-import Link from "next/link";
-import { notFound } from "next/navigation";
+import { PROJECT_ROLES, PROJECT_STATUSES, STAKEHOLDER_TYPES } from "@reforma/core";
 
-import { PROJECT_ROLES, PROJECT_STATUSES } from "@reforma/core";
-
-import { requireUser } from "../../../../lib/auth";
-import { addMember, deleteProject, removeMember, updateProject } from "./actions";
+import { loadProjectAccess } from "../../../../lib/project-access";
+import { ProjectBackLink } from "../project-view-shell";
+import {
+  addMember,
+  deleteProject,
+  removeMember,
+  updateMemberStakeholderType,
+  updateProject,
+} from "./actions";
 
 interface SettingsPageProps {
   params: Promise<{ projectId: string }>;
   searchParams: Promise<{ error?: string; ok?: string }>;
 }
 
+function stakeholderTypeLabel(value: string): string {
+  return value.replaceAll("_", " ");
+}
+
 export default async function ProjectSettingsPage({ params, searchParams }: SettingsPageProps) {
   const { projectId } = await params;
   const { error, ok } = await searchParams;
-  const { supabase, user } = await requireUser();
-
-  const { data: project } = await supabase
-    .from("projects")
-    .select("id, name, address_label, description, status")
-    .eq("id", projectId)
-    .maybeSingle();
-
-  if (!project) {
-    notFound();
-  }
+  const {
+    supabase,
+    user,
+    project,
+    role: myRole,
+    canManage,
+    isOwner,
+  } = await loadProjectAccess(projectId);
 
   const { data: members } = await supabase
     .from("project_members")
-    .select("id, role, user_id, profiles(email, full_name)")
+    .select("id, role, stakeholder_type, user_id, profiles(email, full_name)")
     .eq("project_id", project.id)
     .order("created_at");
-
-  const myRole = members?.find((member) => member.user_id === user.id)?.role;
-  const canManage = myRole === "owner" || myRole === "admin";
-  const isOwner = myRole === "owner";
 
   return (
     <>
       <p>
-        <Link href={`/projects/${project.id}`}>← {project.name}</Link>
+        <ProjectBackLink
+          projectId={project.id}
+          fallbackHref={`/projects/${project.id}`}
+          fallbackLabel={project.name}
+        />
       </p>
       <h1>Project settings</h1>
 
@@ -48,7 +53,7 @@ export default async function ProjectSettingsPage({ params, searchParams }: Sett
 
       {!canManage ? (
         <p className="notice error">
-          Only project owners and admins can change settings. Your role: {myRole ?? "unknown"}.
+          Only project owners and admins can change settings. Your role: {myRole}.
         </p>
       ) : null}
 
@@ -82,6 +87,16 @@ export default async function ProjectSettingsPage({ params, searchParams }: Sett
             ))}
           </select>
         </label>
+        <div className="grid two">
+          <label className="field">
+            <span>Project start</span>
+            <input name="startDate" type="date" defaultValue={project.start_date ?? ""} />
+          </label>
+          <label className="field">
+            <span>Project deadline</span>
+            <input name="deadlineDate" type="date" defaultValue={project.deadline_date ?? ""} />
+          </label>
+        </div>
         <button type="submit" disabled={!canManage}>
           Save changes
         </button>
@@ -89,6 +104,10 @@ export default async function ProjectSettingsPage({ params, searchParams }: Sett
 
       <div className="card">
         <h2>Members</h2>
+        <p className="muted">
+          Permission controls access. Project function records the person&apos;s real role in the
+          renovation.
+        </p>
         <ul className="item-list">
           {(members ?? []).map((member) => (
             <li key={member.id}>
@@ -97,13 +116,37 @@ export default async function ProjectSettingsPage({ params, searchParams }: Sett
                 {member.user_id === user.id ? <span className="muted"> (you)</span> : null}
                 <div className="muted">{member.profiles?.email}</div>
               </div>
-              <div>
-                <span className={`badge role-${member.role}`}>{member.role}</span>{" "}
-                {canManage && member.user_id !== user.id ? (
-                  <form action={removeMember} style={{ display: "inline" }}>
+              <div className="member-controls">
+                <div className="button-row">
+                  <span className={`badge role-${member.role}`}>{member.role}</span>
+                  <span className="badge stakeholder-badge">
+                    {stakeholderTypeLabel(member.stakeholder_type)}
+                  </span>
+                </div>
+                {canManage ? (
+                  <form action={updateMemberStakeholderType} className="member-function-form">
                     <input type="hidden" name="projectId" value={project.id} />
                     <input type="hidden" name="membershipId" value={member.id} />
-                    <button type="submit" className="link">
+                    <label className="field">
+                      <span>Project function</span>
+                      <select name="stakeholderType" defaultValue={member.stakeholder_type}>
+                        {STAKEHOLDER_TYPES.map((stakeholderType) => (
+                          <option key={stakeholderType} value={stakeholderType}>
+                            {stakeholderTypeLabel(stakeholderType)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <button type="submit" className="secondary">
+                      Update function
+                    </button>
+                  </form>
+                ) : null}
+                {canManage && member.user_id !== user.id ? (
+                  <form action={removeMember}>
+                    <input type="hidden" name="projectId" value={project.id} />
+                    <input type="hidden" name="membershipId" value={member.id} />
+                    <button type="submit" className="link danger-link">
                       Remove
                     </button>
                   </form>
@@ -125,11 +168,21 @@ export default async function ProjectSettingsPage({ params, searchParams }: Sett
               <input name="email" type="email" required />
             </label>
             <label className="field">
-              <span>Role</span>
+              <span>Permission</span>
               <select name="role" defaultValue="editor">
                 {PROJECT_ROLES.filter((role) => role !== "owner" || isOwner).map((role) => (
                   <option key={role} value={role}>
                     {role}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              <span>Project function</span>
+              <select name="stakeholderType" defaultValue="site_manager">
+                {STAKEHOLDER_TYPES.map((stakeholderType) => (
+                  <option key={stakeholderType} value={stakeholderType}>
+                    {stakeholderTypeLabel(stakeholderType)}
                   </option>
                 ))}
               </select>

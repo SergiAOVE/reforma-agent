@@ -14,6 +14,8 @@
 - **Personal data minimization**: full postal addresses are avoided (`address_label` is a label)
   and only strictly necessary data is requested.
 - **Role-based permissions**: owner, admin, editor and viewer with differentiated capabilities.
+- **Function is not permission**: customer, site manager, architect, engineer, contractor and
+  other stakeholder types never grant database access.
 - **Traceability**: `audit_log` records relevant actions (publishing, approving or rejecting AI
   drafts, membership changes).
 - **Gateway containment**: optional third-party gateways call first-party server APIs and never
@@ -28,6 +30,17 @@
 | editor | Create setup data, documents, budget items, visits, evidence, issues and decisions |
 | viewer | Read only                                                                          |
 
+## Stakeholder functions
+
+`project_members.stakeholder_type` records the member's real-world project function separately
+from `project_members.role`. RLS never reads `stakeholder_type`; changing customer to architect,
+for example, does not change what the user can access.
+
+Supported functions are customer, site manager, architect, engineer, contractor, foreman,
+worker, consultant and other. Owners/admins can edit this descriptive field. Authenticated table
+grants restrict direct membership updates to `stakeholder_type`, so identity and permission-role
+columns cannot be changed through the Data API.
+
 ## RLS implementation (Phases 1–8)
 
 Implemented in [20260702120200_enable_rls.sql](../../supabase/migrations/20260702120200_enable_rls.sql)
@@ -38,6 +51,7 @@ and [20260703182114_phase5_worker_job_claiming.sql](../../supabase/migrations/20
 and [20260703190634_phase7_summary_review_metadata.sql](../../supabase/migrations/20260703190634_phase7_summary_review_metadata.sql)
 and [20260703193548_phase8_weekly_summaries.sql](../../supabase/migrations/20260703193548_phase8_weekly_summaries.sql)
 and [20260704073241_phase12_document_intelligence.sql](../../supabase/migrations/20260704073241_phase12_document_intelligence.sql)
+and [20260728162801_stakeholder_responsibilities.sql](../../supabase/migrations/20260728162801_stakeholder_responsibilities.sql)
 (every policy is commented in the SQL). Summary:
 
 **Helper functions** — `SECURITY DEFINER`, `STABLE`, pinned `search_path`, execute revoked from
@@ -58,7 +72,7 @@ without recursing into their own policy:
 
 - `create_project_with_owner(name, address_label, description)` — `SECURITY INVOKER`; creates
   the project and the owner membership atomically under the normal RLS policies.
-- `add_project_member_by_email(project_id, email, role)` — `SECURITY DEFINER` because the caller
+- `add_project_member_by_email(project_id, email, role, stakeholder_type)` — `SECURITY DEFINER` because the caller
   cannot see profiles of not-yet-member users; all permission checks run inside (caller must be
   owner/admin; only owners may grant the owner role) and the action is written to `audit_log`.
 - `claim_agent_job(worker_id, allowed_types, stale_after_seconds)` — `SECURITY INVOKER`,
@@ -66,17 +80,17 @@ without recursing into their own policy:
 
 **Policy pattern per table:**
 
-| Table                                                                                         | select           | insert                    | update             | delete                         |
-| --------------------------------------------------------------------------------------------- | ---------------- | ------------------------- | ------------------ | ------------------------------ |
-| `profiles`                                                                                    | own + co-members | own                       | own                | — (cascade from `auth.users`)  |
-| `projects`                                                                                    | member           | creator (`created_by`)    | owner/admin        | owner                          |
-| `project_members`                                                                             | member           | owner/admin + bootstrap   | owner/admin        | owner/admin; owner rows: owner |
-| `zones`, `trades`, `documents`, `contract_items`, `visits`, `evidence`, `issues`, `decisions` | member           | owner/admin/editor        | owner/admin/editor | owner/admin/editor             |
-| `audio_transcriptions`                                                                        | member           | — (worker only)           | editors            | — (raw transcript preserved)   |
-| `weekly_summaries`                                                                            | member           | — (worker only)           | editors            | — (review history preserved)   |
-| `document_insights`                                                                           | member           | — (worker only)           | editors            | — (review history preserved)   |
-| `agent_jobs`                                                                                  | member           | editors (self as creator) | — (worker only)    | — (worker only)                |
-| `audit_log`                                                                                   | member           | member, about self        | —                  | — (append-only)                |
+| Table                                                                                         | select           | insert                    | update                             | delete                         |
+| --------------------------------------------------------------------------------------------- | ---------------- | ------------------------- | ---------------------------------- | ------------------------------ |
+| `profiles`                                                                                    | own + co-members | own                       | own                                | — (cascade from `auth.users`)  |
+| `projects`                                                                                    | member           | creator (`created_by`)    | owner/admin                        | owner                          |
+| `project_members`                                                                             | member           | owner/admin + bootstrap   | owner/admin, stakeholder type only | owner/admin; owner rows: owner |
+| `zones`, `trades`, `documents`, `contract_items`, `visits`, `evidence`, `issues`, `decisions` | member           | owner/admin/editor        | owner/admin/editor                 | owner/admin/editor             |
+| `audio_transcriptions`                                                                        | member           | — (worker only)           | editors                            | — (raw transcript preserved)   |
+| `weekly_summaries`                                                                            | member           | — (worker only)           | editors                            | — (review history preserved)   |
+| `document_insights`                                                                           | member           | — (worker only)           | editors                            | — (review history preserved)   |
+| `agent_jobs`                                                                                  | member           | editors (self as creator) | — (worker only)                    | — (worker only)                |
+| `audit_log`                                                                                   | member           | member, about self        | —                                  | — (append-only)                |
 
 Notes:
 
@@ -84,6 +98,9 @@ Notes:
   into `project_members` (checked via `is_project_creator`, a definer helper — an inline
   subquery would run under RLS and never match); everything else requires owner/admin.
 - **Admins cannot remove owners**: deleting an `owner` membership requires the `owner` role.
+- **Assignments stay inside the project**: composite foreign keys from issues and decisions to
+  `(project_id, user_id)` in `project_members` reject cross-project responsible people or
+  approvers. Removing a member clears only the assignment.
 - **`anon` gets nothing**: all policies target `authenticated` only.
 - **The worker bypasses RLS** with the service role key; that is why job state transitions and
   transcript creation have no client policies at all.
@@ -238,6 +255,15 @@ document intelligence, OCR, image analysis or upload path.
 - Issue and decision review uses the existing `issues` and `decisions` RLS policies.
 - Review actions do not enqueue worker jobs and do not run AI inside web requests.
 
+## Stakeholder responsibility security (Phase 13)
+
+- Stakeholder types are descriptive and are never evaluated by RLS.
+- Issue and decision assignments may reference only members of the same project.
+- Owner/admin/editor permissions remain unchanged for creating and reviewing issues or decisions;
+  assignment does not silently grant write access.
+- Membership stakeholder changes and issue/decision assignment changes are audit logged.
+- The web app continues to use only the signed-in user's publishable-key session.
+
 ## Weekly summary security (Phase 8)
 
 - The web app can enqueue `generate_weekly_summary` jobs through the existing `agent_jobs`
@@ -277,7 +303,7 @@ central multi-tenant service: each renovation's data stays under the control of 
 
 ## Status
 
-Phases 1–12 done: schema + RLS in migrations, auth and membership management live in the web app,
+Phases 1–13 done: schema + RLS in migrations, auth and membership management live in the web app,
 private project document Storage and private visit evidence Storage are implemented, the
 service-role worker can transcribe audio evidence and generate reviewable text drafts through
 `agent_jobs`, project members can review AI drafts and weekly summaries with audit logging, and

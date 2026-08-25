@@ -12,12 +12,15 @@ import {
   evidenceTypeFromMimeType,
   issueCreateFormSchema,
   issueReviewFormSchema,
+  issueStatusTransitionSchema,
   parseBudgetCsv,
   projectFormSchema,
   projectSettingsSchema,
   signInSchema,
   signUpSchema,
+  siteUpdateStartSchema,
   summaryReviewFormSchema,
+  updateMemberStakeholderSchema,
   visitFormSchema,
   visitStatusTransitionSchema,
   weeklySummaryRequestSchema,
@@ -70,19 +73,102 @@ describe("projectSettingsSchema", () => {
     expect(projectSettingsSchema.safeParse({ name: "Demo", status: "active" }).success).toBe(true);
     expect(projectSettingsSchema.safeParse({ name: "Demo", status: "bogus" }).success).toBe(false);
   });
+
+  it("accepts an optional project start and deadline", () => {
+    expect(
+      projectSettingsSchema.parse({
+        name: "Demo",
+        status: "active",
+        startDate: "2026-06-01",
+        deadlineDate: "2026-09-30",
+      }),
+    ).toMatchObject({ startDate: "2026-06-01", deadlineDate: "2026-09-30" });
+  });
+
+  it("rejects a deadline before the project start", () => {
+    expect(
+      projectSettingsSchema.safeParse({
+        name: "Demo",
+        status: "active",
+        startDate: "2026-09-30",
+        deadlineDate: "2026-06-01",
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe("siteUpdateStartSchema", () => {
+  it("accepts every operator shortcut destination", () => {
+    for (const destination of ["update", "files", "issue", "decision"]) {
+      expect(
+        siteUpdateStartSchema.safeParse({
+          projectId: "11111111-1111-4111-8111-111111111111",
+          destination,
+        }).success,
+      ).toBe(true);
+    }
+  });
+
+  it("defaults to the update step and rejects unknown destinations", () => {
+    expect(
+      siteUpdateStartSchema.parse({ projectId: "11111111-1111-4111-8111-111111111111" })
+        .destination,
+    ).toBe("update");
+    expect(
+      siteUpdateStartSchema.safeParse({
+        projectId: "11111111-1111-4111-8111-111111111111",
+        destination: "camera",
+      }).success,
+    ).toBe(false);
+  });
 });
 
 describe("addMemberSchema", () => {
-  it("accepts a valid email and role", () => {
-    expect(addMemberSchema.safeParse({ email: "luis@example.com", role: "viewer" }).success).toBe(
-      true,
-    );
+  it("accepts a valid email, permission role and stakeholder type", () => {
+    expect(
+      addMemberSchema.safeParse({
+        email: "luis@example.com",
+        role: "viewer",
+        stakeholderType: "architect",
+      }).success,
+    ).toBe(true);
   });
 
-  it("rejects unknown roles", () => {
-    expect(addMemberSchema.safeParse({ email: "luis@example.com", role: "boss" }).success).toBe(
-      false,
-    );
+  it("rejects unknown permission roles and stakeholder types", () => {
+    expect(
+      addMemberSchema.safeParse({
+        email: "luis@example.com",
+        role: "boss",
+        stakeholderType: "architect",
+      }).success,
+    ).toBe(false);
+    expect(
+      addMemberSchema.safeParse({
+        email: "luis@example.com",
+        role: "viewer",
+        stakeholderType: "boss",
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe("updateMemberStakeholderSchema", () => {
+  it("accepts a membership id and known stakeholder type", () => {
+    expect(
+      updateMemberStakeholderSchema.safeParse({
+        membershipId: "11111111-1111-4111-8111-111111111111",
+        stakeholderType: "contractor",
+      }).success,
+    ).toBe(true);
+  });
+
+  it("rejects an unknown stakeholder type", () => {
+    expect(
+      updateMemberStakeholderSchema.safeParse({
+        membershipId: "11111111-1111-4111-8111-111111111111",
+        stakeholderType: "boss",
+      }).success,
+    ).toBe(false);
   });
 });
 
@@ -225,6 +311,14 @@ describe("visitStatusTransitionSchema", () => {
   });
 });
 
+describe("issueStatusTransitionSchema", () => {
+  it("only accepts open and closed workflow states", () => {
+    expect(issueStatusTransitionSchema.safeParse({ status: "open" }).success).toBe(true);
+    expect(issueStatusTransitionSchema.safeParse({ status: "closed" }).success).toBe(true);
+    expect(issueStatusTransitionSchema.safeParse({ status: "rejected" }).success).toBe(false);
+  });
+});
+
 describe("evidenceMetadataSchema", () => {
   it("normalizes optional visit evidence references", () => {
     const parsed = evidenceMetadataSchema.parse({
@@ -352,6 +446,8 @@ describe("issueReviewFormSchema", () => {
       zoneId: "",
       tradeId: "",
       contractItemId: "",
+      responsibleUserId: "11111111-1111-4111-8111-111111111111",
+      approverUserId: "",
       costRisk: "  possible variation ",
       scheduleRisk: "",
     });
@@ -364,6 +460,8 @@ describe("issueReviewFormSchema", () => {
       zoneId: null,
       tradeId: null,
       contractItemId: null,
+      responsibleUserId: "11111111-1111-4111-8111-111111111111",
+      approverUserId: null,
       costRisk: "possible variation",
       scheduleRisk: null,
     });
@@ -373,6 +471,26 @@ describe("issueReviewFormSchema", () => {
     expect(
       issueReviewFormSchema.safeParse({ action: "edit", title: "", priority: "medium" }).success,
     ).toBe(false);
+  });
+
+  it("accepts every issue workflow action from the review form", () => {
+    for (const action of ["approve", "edit", "reject", "close"]) {
+      expect(
+        issueReviewFormSchema.safeParse({
+          action,
+          title: "Confirm moisture source",
+          description: "",
+          priority: "high",
+          zoneId: "",
+          tradeId: "",
+          contractItemId: "",
+          responsibleUserId: "",
+          approverUserId: "",
+          costRisk: "",
+          scheduleRisk: "",
+        }).success,
+      ).toBe(true);
+    }
   });
 });
 
@@ -386,6 +504,8 @@ describe("issueCreateFormSchema", () => {
       zoneId: "",
       tradeId: "",
       contractItemId: "",
+      responsibleUserId: "",
+      approverUserId: "22222222-2222-4222-8222-222222222222",
       costRisk: "",
       scheduleRisk: "Needs inspection before closing the wall.",
     });
@@ -398,6 +518,8 @@ describe("issueCreateFormSchema", () => {
       zoneId: null,
       tradeId: null,
       contractItemId: null,
+      responsibleUserId: null,
+      approverUserId: "22222222-2222-4222-8222-222222222222",
       costRisk: null,
       scheduleRisk: "Needs inspection before closing the wall.",
     });
@@ -417,6 +539,8 @@ describe("decisionReviewFormSchema", () => {
       priority: "medium",
       zoneId: "",
       tradeId: "",
+      responsibleUserId: "11111111-1111-4111-8111-111111111111",
+      approverUserId: "",
       deadline: "",
       optionsText: "Quartz\nLaminate",
       recommendation: "Choose quartz.",
@@ -430,6 +554,8 @@ describe("decisionReviewFormSchema", () => {
       priority: "medium",
       zoneId: null,
       tradeId: null,
+      responsibleUserId: "11111111-1111-4111-8111-111111111111",
+      approverUserId: null,
       deadline: null,
       optionsText: "Quartz\nLaminate",
       costImpact: null,
@@ -447,6 +573,28 @@ describe("decisionReviewFormSchema", () => {
       }).success,
     ).toBe(false);
   });
+
+  it("accepts every decision workflow action from the review form", () => {
+    for (const action of ["approve", "edit", "reject", "close"]) {
+      expect(
+        decisionReviewFormSchema.safeParse({
+          action,
+          title: "Choose tiles",
+          description: "",
+          priority: "medium",
+          zoneId: "",
+          tradeId: "",
+          responsibleUserId: "",
+          approverUserId: "",
+          deadline: "",
+          optionsText: "",
+          recommendation: "",
+          costImpact: "",
+          scheduleImpact: "",
+        }).success,
+      ).toBe(true);
+    }
+  });
 });
 
 describe("decisionCreateFormSchema", () => {
@@ -458,6 +606,8 @@ describe("decisionCreateFormSchema", () => {
       visitId: "",
       zoneId: "",
       tradeId: "",
+      responsibleUserId: "",
+      approverUserId: "22222222-2222-4222-8222-222222222222",
       deadline: "2026-07-15",
       optionsText: "Porcelain\nCeramic",
       recommendation: "",
@@ -470,6 +620,8 @@ describe("decisionCreateFormSchema", () => {
       description: "Owner selection needed.",
       priority: "medium",
       visitId: null,
+      responsibleUserId: null,
+      approverUserId: "22222222-2222-4222-8222-222222222222",
       deadline: "2026-07-15",
       optionsText: "Porcelain\nCeramic",
       recommendation: null,

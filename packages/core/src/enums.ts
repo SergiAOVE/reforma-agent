@@ -13,6 +13,20 @@ export const PROJECT_ROLES = ["owner", "admin", "editor", "viewer"] as const;
 export const projectRoleSchema = z.enum(PROJECT_ROLES);
 export type ProjectRole = z.infer<typeof projectRoleSchema>;
 
+export const STAKEHOLDER_TYPES = [
+  "customer",
+  "site_manager",
+  "architect",
+  "engineer",
+  "contractor",
+  "foreman",
+  "worker",
+  "consultant",
+  "other",
+] as const;
+export const stakeholderTypeSchema = z.enum(STAKEHOLDER_TYPES);
+export type StakeholderType = z.infer<typeof stakeholderTypeSchema>;
+
 export const PROJECT_STATUSES = ["active", "paused", "completed", "archived"] as const;
 export const projectStatusSchema = z.enum(PROJECT_STATUSES);
 export type ProjectStatus = z.infer<typeof projectStatusSchema>;

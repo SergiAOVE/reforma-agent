@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Camera, Upload } from "lucide-react";
 
 import { uploadEvidenceBatch } from "../actions";
 
@@ -123,7 +124,7 @@ export function EvidenceUploadPanel({
       <input type="hidden" name="visitId" value={visitId} />
 
       <div className="form-status-row">
-        <strong>Upload evidence</strong>
+        <strong>Add photos and files</strong>
         <span
           className={`save-state ${uploadState.status === "error" ? "error" : ""}`}
           role="status"
@@ -135,12 +136,12 @@ export function EvidenceUploadPanel({
               ? `${uploadState.message} - ${formatSavedTime(uploadState.savedAt)}`
               : uploadState.status === "error"
                 ? `${uploadState.message ? `${uploadState.message} ` : ""}${uploadState.error}`
-                : "Ready"}
+                : "Nothing selected"}
         </span>
       </div>
 
       <label className="field">
-        <span>Files</span>
+        <span>Select one or several items</span>
         <input
           name="files"
           type="file"
@@ -150,6 +151,9 @@ export function EvidenceUploadPanel({
           onChange={(event) => setFiles(Array.from(event.target.files ?? []))}
         />
       </label>
+      <p className="muted upload-hint">
+        <Camera size={17} aria-hidden="true" /> You can select several photos in one go.
+      </p>
 
       {previews.length > 0 ? (
         <ul className="upload-preview-list">
@@ -174,50 +178,54 @@ export function EvidenceUploadPanel({
         </ul>
       ) : null}
 
-      <div className="grid two">
-        <label className="field">
-          <span>Zone for selected files</span>
-          <select name="zoneId" disabled={!canEdit || uploadState.status === "uploading"}>
-            <option value="">None</option>
-            {zones.map((zone) => (
-              <option key={zone.id} value={zone.id}>
-                {zone.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="field">
-          <span>Trade for selected files</span>
-          <select name="tradeId" disabled={!canEdit || uploadState.status === "uploading"}>
-            <option value="">None</option>
-            {trades.map((trade) => (
-              <option key={trade.id} value={trade.id}>
-                {trade.name}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
+      <details className="upload-details">
+        <summary>Add a zone, trade or note (optional)</summary>
+        <div className="grid two">
+          <label className="field">
+            <span>Zone for all selected items</span>
+            <select name="zoneId" disabled={!canEdit || uploadState.status === "uploading"}>
+              <option value="">No specific zone</option>
+              {zones.map((zone) => (
+                <option key={zone.id} value={zone.id}>
+                  {zone.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            <span>Trade for all selected items</span>
+            <select name="tradeId" disabled={!canEdit || uploadState.status === "uploading"}>
+              <option value="">No specific trade</option>
+              {trades.map((trade) => (
+                <option key={trade.id} value={trade.id}>
+                  {trade.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
 
-      <label className="field">
-        <span>Note for selected files</span>
-        <textarea
-          name="manualNote"
-          rows={3}
-          maxLength={2000}
-          disabled={!canEdit || uploadState.status === "uploading"}
-        />
-      </label>
+        <label className="field">
+          <span>Note for all selected items</span>
+          <textarea
+            name="manualNote"
+            rows={3}
+            maxLength={2000}
+            disabled={!canEdit || uploadState.status === "uploading"}
+          />
+        </label>
+      </details>
 
       <button
         type="submit"
         disabled={!canEdit || uploadState.status === "uploading" || files.length === 0}
       >
+        <Upload size={18} aria-hidden="true" />
         {uploadState.status === "uploading"
           ? "Uploading..."
           : files.length > 1
-            ? `Upload ${files.length} files`
-            : "Upload evidence"}
+            ? `Add ${files.length} items`
+            : "Add selected item"}
       </button>
     </form>
   );

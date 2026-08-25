@@ -1,11 +1,14 @@
-import Link from "next/link";
+import { Archive, CheckCircle2, RotateCcw, Trash2 } from "lucide-react";
 import { notFound } from "next/navigation";
 
-import { type VisitStatus, type VisitTextExtractionJobType } from "@reforma/core";
+import { type VisitTextExtractionJobType } from "@reforma/core";
 
 import { loadProjectAccess } from "../../../../../lib/project-access";
 import { VISIT_EVIDENCE_BUCKET } from "../../../../../lib/storage";
+import { ProjectBackLink } from "../../project-view-shell";
 import {
+  CreateDecisionForm,
+  CreateIssueForm,
   DecisionInspectionPanel,
   DecisionReviewForm,
   IssueInspectionPanel,
@@ -40,6 +43,12 @@ function formatDateTime(value: string): string {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value));
+}
+
+function siteUpdateStatusLabel(value: string): string {
+  if (value === "draft") return "In progress";
+  if (value === "published") return "Finished";
+  return "Archived";
 }
 
 function EvidencePreview({
@@ -84,12 +93,6 @@ const TEXT_EXTRACTION_JOBS: { type: VisitTextExtractionJobType; label: string }[
   { type: "suggest_decisions", label: "Suggest decisions" },
 ];
 
-const VISIT_STATUS_ACTIONS: { status: VisitStatus; label: string }[] = [
-  { status: "draft", label: "Draft" },
-  { status: "published", label: "Published" },
-  { status: "archived", label: "Archived" },
-];
-
 const OPEN_ISSUE_STATUSES = ["open", "in_review", "waiting_builder", "waiting_owner"] as const;
 
 function visitIdFromJobInput(input: unknown): string | null {
@@ -108,7 +111,7 @@ function isVisitTextExtractionJobType(value: string): value is VisitTextExtracti
 export default async function VisitPage({ params, searchParams }: VisitPageProps) {
   const { projectId, visitId } = await params;
   const { error, ok } = await searchParams;
-  const { supabase, project, role, canEdit } = await loadProjectAccess(projectId);
+  const { supabase, user, project, role, canEdit } = await loadProjectAccess(projectId);
 
   // Visit and evidence come first: the queries below are scoped to this
   // visit's evidence ids instead of loading project-wide rows.
@@ -142,6 +145,7 @@ export default async function VisitPage({ params, searchParams }: VisitPageProps
     { data: zones },
     { data: trades },
     { data: contractItems },
+    { data: members },
     { data: transcriptions },
     { data: transcriptionJobs },
     { data: extractionJobs },
@@ -157,6 +161,11 @@ export default async function VisitPage({ params, searchParams }: VisitPageProps
       .select("id, code, title")
       .eq("project_id", project.id)
       .order("title"),
+    supabase
+      .from("project_members")
+      .select("user_id, role, stakeholder_type, profiles(email, full_name)")
+      .eq("project_id", project.id)
+      .order("created_at"),
     evidenceIds.length === 0
       ? emptyRows
       : supabase
@@ -186,7 +195,7 @@ export default async function VisitPage({ params, searchParams }: VisitPageProps
     supabase
       .from("issues")
       .select(
-        "id, visit_id, title, description, priority, status, review_state, source, zone_id, trade_id, contract_item_id, cost_risk, schedule_risk, created_at, zones(name), trades(name)",
+        "id, visit_id, title, description, priority, status, review_state, source, zone_id, trade_id, contract_item_id, responsible_user_id, approver_user_id, cost_risk, schedule_risk, created_at, zones(name), trades(name)",
       )
       .eq("project_id", project.id)
       .eq("visit_id", visitId)
@@ -196,7 +205,7 @@ export default async function VisitPage({ params, searchParams }: VisitPageProps
     supabase
       .from("decisions")
       .select(
-        "id, visit_id, title, description, priority, status, review_state, source, zone_id, trade_id, deadline, options, recommendation, cost_impact, schedule_impact, created_at, zones(name), trades(name)",
+        "id, visit_id, title, description, priority, status, review_state, source, zone_id, trade_id, responsible_user_id, approver_user_id, deadline, options, recommendation, cost_impact, schedule_impact, created_at, zones(name), trades(name)",
       )
       .eq("project_id", project.id)
       .eq("visit_id", visitId)
@@ -206,7 +215,7 @@ export default async function VisitPage({ params, searchParams }: VisitPageProps
     supabase
       .from("issues")
       .select(
-        "id, visit_id, title, description, priority, status, review_state, source, zone_id, trade_id, contract_item_id, cost_risk, schedule_risk, zones(name), trades(name)",
+        "id, visit_id, title, description, priority, status, review_state, source, zone_id, trade_id, contract_item_id, responsible_user_id, approver_user_id, cost_risk, schedule_risk, zones(name), trades(name)",
       )
       .eq("project_id", project.id)
       .eq("visit_id", visitId)
@@ -215,7 +224,7 @@ export default async function VisitPage({ params, searchParams }: VisitPageProps
     supabase
       .from("decisions")
       .select(
-        "id, visit_id, title, description, priority, status, review_state, source, zone_id, trade_id, deadline, options, recommendation, cost_impact, schedule_impact, zones(name), trades(name)",
+        "id, visit_id, title, description, priority, status, review_state, source, zone_id, trade_id, responsible_user_id, approver_user_id, deadline, options, recommendation, cost_impact, schedule_impact, zones(name), trades(name)",
       )
       .eq("project_id", project.id)
       .eq("visit_id", visitId)
@@ -226,6 +235,7 @@ export default async function VisitPage({ params, searchParams }: VisitPageProps
   const safeZones = zones ?? [];
   const safeTrades = trades ?? [];
   const safeContractItems = contractItems ?? [];
+  const safeMembers = members ?? [];
   const safeIssueDrafts = issueDrafts ?? [];
   const safeDecisionDrafts = decisionDrafts ?? [];
   const safeVisitIssues = visitIssues ?? [];
@@ -234,6 +244,8 @@ export default async function VisitPage({ params, searchParams }: VisitPageProps
     visit.summary_source === "ai" &&
     (visit.summary_review_state === "ai_draft" || visit.summary_review_state === "edited") &&
     Boolean(visit.summary);
+  const aiDraftCount =
+    (hasAiSummaryDraft ? 1 : 0) + safeIssueDrafts.length + safeDecisionDrafts.length;
   const evidenceWithUrls = await Promise.all(
     (evidence ?? []).map(async (item) => {
       const { data } = await supabase.storage
@@ -272,15 +284,21 @@ export default async function VisitPage({ params, searchParams }: VisitPageProps
   return (
     <>
       <p>
-        <Link href={`/projects/${project.id}/visits`}>{"<- Visits"}</Link>
+        <ProjectBackLink
+          projectId={project.id}
+          fallbackHref={`/projects/${project.id}/visits`}
+          fallbackLabel="Site updates"
+        />
       </p>
       <div className="page-title">
         <div>
           <h1>{visit.title}</h1>
-          <p className="muted">{visit.visit_date}</p>
+          <p className="muted">Site update · {visit.visit_date}</p>
         </div>
         <div>
-          <span className={`badge status-${visit.status}`}>{visit.status}</span>{" "}
+          <span className={`badge status-${visit.status}`}>
+            {siteUpdateStatusLabel(visit.status)}
+          </span>{" "}
           <span className={`badge role-${role}`}>{role}</span>
         </div>
       </div>
@@ -289,12 +307,12 @@ export default async function VisitPage({ params, searchParams }: VisitPageProps
       {ok ? <p className="notice ok">{ok}</p> : null}
       {!canEdit ? (
         <p className="notice error">
-          Your role is read-only here. Owners, admins and editors can change visits and evidence.
+          Your project permission is read-only. Owners, admins and editors can change site updates.
         </p>
       ) : null}
 
       <VisitTabs
-        details={
+        update={
           <section className="card">
             <VisitAutosaveForm
               projectId={project.id}
@@ -305,7 +323,7 @@ export default async function VisitPage({ params, searchParams }: VisitPageProps
             />
           </section>
         }
-        evidence={
+        files={
           <>
             <section className="card">
               <EvidenceUploadPanel
@@ -318,9 +336,9 @@ export default async function VisitPage({ params, searchParams }: VisitPageProps
             </section>
 
             <section className="card">
-              <h2>Evidence</h2>
+              <h2>Photos and files</h2>
               {evidenceWithUrls.length === 0 ? (
-                <p className="muted">No evidence yet.</p>
+                <p className="muted">No photos or files yet.</p>
               ) : (
                 <ul className="stack-list">
                   {evidenceWithUrls.map((item) => (
@@ -438,87 +456,109 @@ export default async function VisitPage({ params, searchParams }: VisitPageProps
             </section>
           </>
         }
-        review={
+        finish={
           <>
-            <section className="card">
-              <h2>Visit status</h2>
+            <section className="card finish-update-card">
+              <div className="operator-section-heading">
+                <div>
+                  <span className="eyebrow">Final step</span>
+                  <h2>Finish this site update</h2>
+                </div>
+                <span className={`badge status-${visit.status}`}>
+                  {siteUpdateStatusLabel(visit.status)}
+                </span>
+              </div>
               {canEdit ? (
                 <>
-                  <div className="status-action-row" aria-label="Visit status">
-                    {VISIT_STATUS_ACTIONS.map((action) => {
-                      const isCurrent = visit.status === action.status;
+                  {visit.status === "draft" ? (
+                    <>
+                      <p>
+                        Notes save automatically. Finish when today&apos;s notes and photos are
+                        ready for the project team.
+                      </p>
+                      <form action={setVisitStatus}>
+                        <input type="hidden" name="projectId" value={project.id} />
+                        <input type="hidden" name="visitId" value={visit.id} />
+                        <input type="hidden" name="status" value="published" />
+                        <button type="submit" className="finish-update-action">
+                          <CheckCircle2 size={20} aria-hidden="true" /> Finish update
+                        </button>
+                      </form>
+                    </>
+                  ) : visit.status === "published" ? (
+                    <div className="finished-update-message">
+                      <CheckCircle2 size={22} aria-hidden="true" />
+                      <div>
+                        <strong>This update is finished.</strong>
+                        <p>The project team can now use it as part of the site record.</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="muted">This site update is archived and kept in the history.</p>
+                  )}
 
-                      return (
-                        <form key={action.status} action={setVisitStatus}>
+                  <details className="finish-more-options">
+                    <summary>More options</summary>
+                    <div className="finish-option-list">
+                      {visit.status !== "draft" ? (
+                        <form action={setVisitStatus}>
                           <input type="hidden" name="projectId" value={project.id} />
                           <input type="hidden" name="visitId" value={visit.id} />
-                          <input type="hidden" name="status" value={action.status} />
-                          <button
-                            type="submit"
-                            className={
-                              isCurrent ? "status-action active" : "status-action secondary"
-                            }
-                            disabled={isCurrent}
-                            aria-pressed={isCurrent}
-                          >
-                            {action.label}
+                          <input type="hidden" name="status" value="draft" />
+                          <button type="submit" className="secondary">
+                            <RotateCcw size={18} aria-hidden="true" /> Return to draft
                           </button>
                         </form>
-                      );
-                    })}
-                  </div>
-                  <div className="danger-zone">
-                    <form action={deleteVisit}>
-                      <input type="hidden" name="projectId" value={project.id} />
-                      <input type="hidden" name="visitId" value={visit.id} />
-                      <button type="submit" className="danger">
-                        Delete visit
-                      </button>
-                    </form>
-                  </div>
+                      ) : null}
+                      {visit.status !== "archived" ? (
+                        <form action={setVisitStatus}>
+                          <input type="hidden" name="projectId" value={project.id} />
+                          <input type="hidden" name="visitId" value={visit.id} />
+                          <input type="hidden" name="status" value="archived" />
+                          <button type="submit" className="secondary">
+                            <Archive size={18} aria-hidden="true" /> Archive update
+                          </button>
+                        </form>
+                      ) : null}
+                      <form action={deleteVisit}>
+                        <input type="hidden" name="projectId" value={project.id} />
+                        <input type="hidden" name="visitId" value={visit.id} />
+                        <button type="submit" className="danger">
+                          <Trash2 size={18} aria-hidden="true" /> Delete update
+                        </button>
+                      </form>
+                    </div>
+                  </details>
                 </>
               ) : (
-                <p className="muted">You can view this visit but cannot change its status.</p>
+                <p className="muted">You can view this update but cannot change its status.</p>
               )}
             </section>
 
-            <section className="card">
-              <h2>Text extraction</h2>
-              <div className="button-row">
-                {TEXT_EXTRACTION_JOBS.map((definition) => {
-                  const job = latestExtractionJobByType.get(definition.type);
-                  const isRunning = job?.status === "pending" || job?.status === "processing";
-
-                  return (
-                    <form key={definition.type} action={enqueueVisitTextExtraction}>
-                      <input type="hidden" name="projectId" value={project.id} />
-                      <input type="hidden" name="visitId" value={visit.id} />
-                      <input type="hidden" name="jobType" value={definition.type} />
-                      <button type="submit" className="secondary" disabled={!canEdit || isRunning}>
-                        {isRunning ? `${definition.label} queued` : definition.label}
-                      </button>
-                      {job ? (
-                        <span className={`badge status-${job.status}`}>{job.status}</span>
-                      ) : null}
-                    </form>
-                  );
-                })}
-              </div>
-              {TEXT_EXTRACTION_JOBS.map((definition) => {
-                const job = latestExtractionJobByType.get(definition.type);
-                return job?.error_message ? (
-                  <p key={definition.type} className="notice error">
-                    {definition.label}: {job.error_message}
-                  </p>
-                ) : null;
-              })}
-            </section>
-
-            <div className="grid two">
+            <div className="grid two operator-follow-up-grid">
               <section className="card" id="visit-open-issues">
-                <h2>Open issues</h2>
+                <h2>Problems</h2>
+                <CreateIssueForm
+                  projectId={project.id}
+                  visits={[visit]}
+                  zones={safeZones}
+                  trades={safeTrades}
+                  contractItems={safeContractItems}
+                  members={safeMembers}
+                  canEdit={canEdit}
+                  id="new-issue"
+                  summaryLabel="Report a problem"
+                  submitLabel="Report problem"
+                  returnTo="visit"
+                  defaults={{
+                    visitId: visit.id,
+                    zoneId: visit.primary_zone_id,
+                    tradeId: visit.primary_trade_id,
+                    responsibleUserId: user.id,
+                  }}
+                />
                 {safeVisitIssues.length === 0 ? (
-                  <p className="muted">No open issues for this visit.</p>
+                  <p className="muted">No open problems for this update.</p>
                 ) : (
                   <ul className="stack-list compact-stack-list">
                     {safeVisitIssues.map((issue) => (
@@ -526,10 +566,11 @@ export default async function VisitPage({ params, searchParams }: VisitPageProps
                         <IssueInspectionPanel
                           projectId={project.id}
                           issue={issue}
-                          visit={visit}
+                          visits={[visit]}
                           zones={safeZones}
                           trades={safeTrades}
                           contractItems={safeContractItems}
+                          members={safeMembers}
                           canEdit={canEdit}
                         />
                       </li>
@@ -539,9 +580,27 @@ export default async function VisitPage({ params, searchParams }: VisitPageProps
               </section>
 
               <section className="card" id="visit-pending-decisions">
-                <h2>Pending decisions</h2>
+                <h2>Decisions needed</h2>
+                <CreateDecisionForm
+                  projectId={project.id}
+                  visits={[visit]}
+                  zones={safeZones}
+                  trades={safeTrades}
+                  members={safeMembers}
+                  canEdit={canEdit}
+                  id="new-decision"
+                  summaryLabel="Request a decision"
+                  submitLabel="Request decision"
+                  returnTo="visit"
+                  defaults={{
+                    visitId: visit.id,
+                    zoneId: visit.primary_zone_id,
+                    tradeId: visit.primary_trade_id,
+                    responsibleUserId: user.id,
+                  }}
+                />
                 {safeVisitDecisions.length === 0 ? (
-                  <p className="muted">No pending decisions for this visit.</p>
+                  <p className="muted">No pending decisions for this update.</p>
                 ) : (
                   <ul className="stack-list compact-stack-list">
                     {safeVisitDecisions.map((decision) => (
@@ -551,6 +610,7 @@ export default async function VisitPage({ params, searchParams }: VisitPageProps
                           decision={decision}
                           zones={safeZones}
                           trades={safeTrades}
+                          members={safeMembers}
                           canEdit={canEdit}
                         />
                       </li>
@@ -560,67 +620,121 @@ export default async function VisitPage({ params, searchParams }: VisitPageProps
               </section>
             </div>
 
-            <section className="card">
-              <h2>AI drafts</h2>
-              {!hasAiSummaryDraft &&
-              safeIssueDrafts.length === 0 &&
-              safeDecisionDrafts.length === 0 ? (
-                <p className="muted">No AI drafts yet.</p>
-              ) : null}
+            <details className="card archive-section advanced-tools">
+              <summary className="archive-summary">
+                <span>
+                  <strong>AI and advanced tools</strong>
+                  <span className="muted">Optional text assistance</span>
+                </span>
+              </summary>
+              <div className="archive-body">
+                <h3>Text extraction</h3>
+                <div className="button-row">
+                  {TEXT_EXTRACTION_JOBS.map((definition) => {
+                    const job = latestExtractionJobByType.get(definition.type);
+                    const isRunning = job?.status === "pending" || job?.status === "processing";
 
-              {hasAiSummaryDraft ? (
-                <>
-                  <h3>Summary</h3>
-                  <SummaryReviewForm
-                    projectId={project.id}
-                    visit={visit}
-                    canEdit={canEdit}
-                    returnTo="visit"
-                  />
-                </>
-              ) : null}
+                    return (
+                      <form key={definition.type} action={enqueueVisitTextExtraction}>
+                        <input type="hidden" name="projectId" value={project.id} />
+                        <input type="hidden" name="visitId" value={visit.id} />
+                        <input type="hidden" name="jobType" value={definition.type} />
+                        <button
+                          type="submit"
+                          className="secondary"
+                          disabled={!canEdit || isRunning}
+                        >
+                          {isRunning ? `${definition.label} queued` : definition.label}
+                        </button>
+                        {job ? (
+                          <span className={`badge status-${job.status}`}>{job.status}</span>
+                        ) : null}
+                      </form>
+                    );
+                  })}
+                </div>
+                {TEXT_EXTRACTION_JOBS.map((definition) => {
+                  const job = latestExtractionJobByType.get(definition.type);
+                  return job?.error_message ? (
+                    <p key={definition.type} className="notice error">
+                      {definition.label}: {job.error_message}
+                    </p>
+                  ) : null;
+                })}
+              </div>
+            </details>
 
-              {safeIssueDrafts.length > 0 ? (
-                <>
-                  <h3>Issues</h3>
-                  <ul className="stack-list">
-                    {safeIssueDrafts.map((issue) => (
-                      <li key={issue.id} className="stack-item">
-                        <IssueReviewForm
-                          projectId={project.id}
-                          issue={issue}
-                          zones={safeZones}
-                          trades={safeTrades}
-                          contractItems={safeContractItems}
-                          canEdit={canEdit}
-                          returnTo="visit"
-                        />
-                      </li>
-                    ))}
-                  </ul>
-                </>
-              ) : null}
+            <details className="card archive-section advanced-tools">
+              <summary className="archive-summary">
+                <span>
+                  <strong>AI drafts</strong>
+                  <span className="muted">Review optional suggestions</span>
+                </span>
+                <span className="badge">{aiDraftCount}</span>
+              </summary>
+              <div className="archive-body">
+                {!hasAiSummaryDraft &&
+                safeIssueDrafts.length === 0 &&
+                safeDecisionDrafts.length === 0 ? (
+                  <p className="muted">No AI drafts yet.</p>
+                ) : null}
 
-              {safeDecisionDrafts.length > 0 ? (
-                <>
-                  <h3>Decisions</h3>
-                  <ul className="stack-list">
-                    {safeDecisionDrafts.map((decision) => (
-                      <li key={decision.id} className="stack-item">
-                        <DecisionReviewForm
-                          projectId={project.id}
-                          decision={decision}
-                          zones={safeZones}
-                          trades={safeTrades}
-                          canEdit={canEdit}
-                          returnTo="visit"
-                        />
-                      </li>
-                    ))}
-                  </ul>
-                </>
-              ) : null}
-            </section>
+                {hasAiSummaryDraft ? (
+                  <>
+                    <h3>Summary</h3>
+                    <SummaryReviewForm
+                      projectId={project.id}
+                      visit={visit}
+                      canEdit={canEdit}
+                      returnTo="visit"
+                    />
+                  </>
+                ) : null}
+
+                {safeIssueDrafts.length > 0 ? (
+                  <>
+                    <h3>Issues</h3>
+                    <ul className="stack-list">
+                      {safeIssueDrafts.map((issue) => (
+                        <li key={issue.id} className="stack-item">
+                          <IssueReviewForm
+                            projectId={project.id}
+                            issue={issue}
+                            zones={safeZones}
+                            trades={safeTrades}
+                            contractItems={safeContractItems}
+                            members={safeMembers}
+                            canEdit={canEdit}
+                            returnTo="visit"
+                          />
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                ) : null}
+
+                {safeDecisionDrafts.length > 0 ? (
+                  <>
+                    <h3>Decisions</h3>
+                    <ul className="stack-list">
+                      {safeDecisionDrafts.map((decision) => (
+                        <li key={decision.id} className="stack-item">
+                          <DecisionReviewForm
+                            projectId={project.id}
+                            decision={decision}
+                            zones={safeZones}
+                            trades={safeTrades}
+                            members={safeMembers}
+                            canEdit={canEdit}
+                            returnTo="visit"
+                          />
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                ) : null}
+              </div>
+            </details>
           </>
         }
       />

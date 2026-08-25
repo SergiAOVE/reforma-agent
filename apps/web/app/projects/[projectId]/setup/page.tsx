@@ -1,6 +1,5 @@
-import Link from "next/link";
-
 import { loadProjectAccess } from "../../../../lib/project-access";
+import { ProjectBackLink } from "../project-view-shell";
 import { createTrade, createZone } from "./actions";
 import { SetupEntityAutosaveForm } from "./setup-entity-autosave-form";
 import { SetupTabs } from "./setup-tabs";
@@ -39,7 +38,11 @@ export default async function ProjectSetupPage({ params, searchParams }: Project
   return (
     <>
       <p>
-        <Link href={`/projects/${project.id}`}>← {project.name}</Link>
+        <ProjectBackLink
+          projectId={project.id}
+          fallbackHref={`/projects/${project.id}`}
+          fallbackLabel={project.name}
+        />
       </p>
       <div className="page-title">
         <div>

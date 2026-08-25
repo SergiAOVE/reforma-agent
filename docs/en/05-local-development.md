@@ -75,6 +75,31 @@ WORKER_RUN_ONCE=true pnpm --filter @reforma/worker dev
 Seeded test users (local only): `ana@example.com` (owner) and `luis@example.com` (editor),
 password `password123`.
 
+## Testing from a phone on local Wi-Fi
+
+The phone and development Mac must be connected to the same local network. Find the Mac's Wi-Fi
+address:
+
+```bash
+ipconfig getifaddr "$(route -n get default | awk '/interface:/{print $2}')"
+```
+
+Start Supabase normally, then start only the web app with the LAN address as its public Supabase
+URL. Replace `<mac-ip>` with the address returned above:
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=http://<mac-ip>:55321 pnpm --filter @reforma/web dev
+```
+
+Open `http://<mac-ip>:3000` on the phone and sign in with a local seeded user. Using the LAN
+address for Supabase is important because private Storage signed URLs must also be reachable from
+the phone. If the page does not load, allow incoming Node.js and Docker connections in the macOS
+firewall and confirm both devices are still on the same network.
+
+This local route uses plain HTTP. It is suitable for same-network field testing, including mobile
+file selection and uploads, but it is not a production deployment and cannot be used away from the
+local network. Installable PWA behavior and remote field use require an HTTPS deployment.
+
 Phase 3 creates a private `project-documents` Storage bucket. Document uploads are capped at
 10 MB by the bucket configuration and by the web form. Budget CSV imports are capped at 512 KB.
 
@@ -98,6 +123,11 @@ Phase 7 adds the project dashboard and human review actions. Open
 `/projects/<project_id>` to see recent visits, open issues, pending decisions, AI drafts and the
 audit log. Owner/admin/editor roles can approve, edit, reject and close AI drafts; viewers remain
 read-only through RLS.
+
+Phase 13 separates permission roles from professional project functions. Project settings show
+both values for each member, while issue and decision forms can assign a responsible person and
+approver from the same project's members. The local seed identifies Ana as the customer and Luis
+as the site manager.
 
 Phase 8 adds weekly summary generation on the project dashboard. Owner/admin/editor roles can
 enqueue `generate_weekly_summary` for a date range; the worker creates a reviewable

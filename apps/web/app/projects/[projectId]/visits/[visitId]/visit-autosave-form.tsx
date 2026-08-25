@@ -166,7 +166,7 @@ export function VisitAutosaveForm({
 
     const timeout = window.setTimeout(() => {
       void saveCurrentFields();
-    }, 1200);
+    }, 800);
 
     return () => window.clearTimeout(timeout);
   }, [canEdit, fields, saveCurrentFields]);
@@ -180,7 +180,7 @@ export function VisitAutosaveForm({
       }}
     >
       <div className="form-status-row">
-        <strong>Visit details</strong>
+        <strong>Site update</strong>
         <span
           className={`save-state ${saveState.status === "error" ? "error" : ""}`}
           role="status"
@@ -190,103 +190,93 @@ export function VisitAutosaveForm({
         </span>
       </div>
 
-      <div className="grid two">
-        <label className="field">
-          <span>Title</span>
-          <input
-            value={fields.title}
-            onChange={(event) => setField("title", event.target.value)}
-            required
-            maxLength={180}
-            disabled={!canEdit}
-          />
-        </label>
-        <label className="field">
-          <span>Date</span>
-          <input
-            type="date"
-            value={fields.visitDate}
-            onChange={(event) => setField("visitDate", event.target.value)}
-            required
-            disabled={!canEdit}
-          />
-        </label>
-      </div>
-
-      <div className="grid two">
-        <label className="field">
-          <span>Primary zone (optional)</span>
-          <select
-            value={fields.primaryZoneId}
-            onChange={(event) => setField("primaryZoneId", event.target.value)}
-            disabled={!canEdit}
-          >
-            <option value="">None</option>
-            {zones.map((zone) => (
-              <option key={zone.id} value={zone.id}>
-                {zone.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="field">
-          <span>Primary trade (optional)</span>
-          <select
-            value={fields.primaryTradeId}
-            onChange={(event) => setField("primaryTradeId", event.target.value)}
-            disabled={!canEdit}
-          >
-            <option value="">None</option>
-            {trades.map((trade) => (
-              <option key={trade.id} value={trade.id}>
-                {trade.name}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-      <p className="muted">
-        Leave both as None for general visits — measuring, demolition or anything spanning several
-        areas and trades.
-      </p>
-
       <label className="field">
-        <span>General status</span>
-        <input
+        <span>What is happening today?</span>
+        <textarea
           value={fields.generalStatus}
           onChange={(event) => setField("generalStatus", event.target.value)}
+          rows={3}
           maxLength={240}
+          placeholder="For example: kitchen demolition finished and plumbing starts tomorrow."
           disabled={!canEdit}
         />
       </label>
       <label className="field">
-        <span>Human notes</span>
+        <span>More notes (optional)</span>
         <textarea
           value={fields.humanNotes}
           onChange={(event) => setField("humanNotes", event.target.value)}
           rows={5}
           maxLength={2000}
-          disabled={!canEdit}
-        />
-      </label>
-      <label className="field">
-        <span>Summary</span>
-        <textarea
-          value={fields.summary}
-          onChange={(event) => setField("summary", event.target.value)}
-          rows={4}
-          maxLength={2000}
+          placeholder="Add anything the project team should know."
           disabled={!canEdit}
         />
       </label>
 
-      <button
-        type="submit"
-        className="secondary"
-        disabled={!canEdit || saveState.status === "saving"}
-      >
-        {saveState.status === "saving" ? "Saving..." : "Save now"}
-      </button>
+      <details className="autosave-details">
+        <summary>Edit date, title, location or trade</summary>
+        <div className="grid two">
+          <label className="field">
+            <span>Title</span>
+            <input
+              value={fields.title}
+              onChange={(event) => setField("title", event.target.value)}
+              required
+              maxLength={180}
+              disabled={!canEdit}
+            />
+          </label>
+          <label className="field">
+            <span>Date</span>
+            <input
+              type="date"
+              value={fields.visitDate}
+              onChange={(event) => setField("visitDate", event.target.value)}
+              required
+              disabled={!canEdit}
+            />
+          </label>
+        </div>
+
+        <div className="grid two">
+          <label className="field">
+            <span>Zone (optional)</span>
+            <select
+              value={fields.primaryZoneId}
+              onChange={(event) => setField("primaryZoneId", event.target.value)}
+              disabled={!canEdit}
+            >
+              <option value="">General / several zones</option>
+              {zones.map((zone) => (
+                <option key={zone.id} value={zone.id}>
+                  {zone.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            <span>Trade (optional)</span>
+            <select
+              value={fields.primaryTradeId}
+              onChange={(event) => setField("primaryTradeId", event.target.value)}
+              disabled={!canEdit}
+            >
+              <option value="">General / several trades</option>
+              {trades.map((trade) => (
+                <option key={trade.id} value={trade.id}>
+                  {trade.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      </details>
+
+      {saveState.status === "dirty" || saveState.status === "error" ? (
+        <button type="submit" disabled={!canEdit}>
+          Save now
+        </button>
+      ) : null}
     </form>
   );
 }

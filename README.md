@@ -1,6 +1,6 @@
 # reforma-agent
 
-Open source web app for **intelligent home renovation tracking**, built mobile-first and on
+**intelligent home renovation tracking**, built mobile-first and on
 its way to being a full PWA (a web manifest ships already; icons, service worker and offline
 support are still pending).
 
@@ -8,6 +8,10 @@ Someone periodically visits a renovation site to document progress and report it
 live abroad. The app records site visits, stores photos and audio as evidence, transcribes audio,
 generates reviewable summaries, and manages issues, pending decisions, technical documents and an
 itemized budget.
+
+The site-manager experience opens on a phone-friendly **Today** screen. It resumes the current
+daily draft, autosaves notes, accepts several photos at once, and keeps reporting a problem or
+requesting a decision inside the same site-update flow.
 
 ## Core principle
 
@@ -63,9 +67,10 @@ intelligence is documented in
 
 ## Project status
 
-**Implemented through Phase 12**: MVP schema, auth, project setup, visits/evidence, worker jobs,
+**Implemented through Phase 14**: MVP schema, auth, project setup, visits/evidence, worker jobs,
 text-only AI drafts, review workflow, weekly summaries, deployment documentation and an optional
-Telegram/NanoClaw gateway contract plus optional text-only document intelligence. See
+Telegram/NanoClaw gateway contract, optional text-only document intelligence, stakeholder
+functions and responsibility assignments, plus the site-manager field workflow. See
 [PLAN.md](PLAN.md) for the phased roadmap.
 
 ## Security and privacy

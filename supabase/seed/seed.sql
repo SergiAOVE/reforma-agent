@@ -60,20 +60,33 @@ values
 -- ---------------------------------------------------------------------------
 -- Project and memberships
 -- ---------------------------------------------------------------------------
-insert into public.projects (id, name, address_label, description, status, created_by)
+insert into public.projects
+  (id, name, address_label, description, status, start_date, deadline_date, created_by)
 values (
   '11111111-1111-4111-8111-111111111111',
   'Demo renovation',
   'Demo flat',
   'Synthetic project used for local development and manual testing.',
   'active',
+  '2026-06-01',
+  '2026-09-30',
   '00000000-0000-4000-8000-000000000001'
 );
 
-insert into public.project_members (project_id, user_id, role)
+insert into public.project_members (project_id, user_id, role, stakeholder_type)
 values
-  ('11111111-1111-4111-8111-111111111111', '00000000-0000-4000-8000-000000000001', 'owner'),
-  ('11111111-1111-4111-8111-111111111111', '00000000-0000-4000-8000-000000000002', 'editor');
+  (
+    '11111111-1111-4111-8111-111111111111',
+    '00000000-0000-4000-8000-000000000001',
+    'owner',
+    'customer'
+  ),
+  (
+    '11111111-1111-4111-8111-111111111111',
+    '00000000-0000-4000-8000-000000000002',
+    'editor',
+    'site_manager'
+  );
 
 -- ---------------------------------------------------------------------------
 -- Zones and trades
@@ -126,7 +139,10 @@ values (
 );
 
 insert into public.issues
-  (project_id, visit_id, title, description, zone_id, trade_id, priority, status, created_by)
+  (
+    project_id, visit_id, title, description, zone_id, trade_id, priority, status,
+    responsible_user_id, approver_user_id, created_by
+  )
 values (
   '11111111-1111-4111-8111-111111111111',
   '44444444-4444-4444-8444-444444444401',
@@ -136,11 +152,16 @@ values (
   '33333333-3333-4333-8333-333333333302',
   'high',
   'open',
+  '00000000-0000-4000-8000-000000000002',
+  '00000000-0000-4000-8000-000000000001',
   '00000000-0000-4000-8000-000000000002'
 );
 
 insert into public.decisions
-  (project_id, visit_id, title, description, options, priority, status, deadline, created_by)
+  (
+    project_id, visit_id, title, description, options, priority, status, deadline,
+    responsible_user_id, approver_user_id, created_by
+  )
 values (
   '11111111-1111-4111-8111-111111111111',
   '44444444-4444-4444-8444-444444444401',
@@ -150,6 +171,8 @@ values (
   'medium',
   'pending',
   '2026-07-15',
+  '00000000-0000-4000-8000-000000000002',
+  '00000000-0000-4000-8000-000000000001',
   '00000000-0000-4000-8000-000000000001'
 );
 

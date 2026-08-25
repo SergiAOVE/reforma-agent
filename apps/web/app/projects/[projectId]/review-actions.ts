@@ -8,6 +8,7 @@ import {
   decisionReviewFormSchema,
   issueCreateFormSchema,
   issueReviewFormSchema,
+  issueStatusTransitionSchema,
   summaryReviewFormSchema,
   weeklySummaryRequestSchema,
   weeklySummaryReviewFormSchema,
@@ -240,6 +241,8 @@ export async function createIssue(formData: FormData): Promise<void> {
     zoneId: formData.get("zoneId"),
     tradeId: formData.get("tradeId"),
     contractItemId: formData.get("contractItemId"),
+    responsibleUserId: formData.get("responsibleUserId"),
+    approverUserId: formData.get("approverUserId"),
     costRisk: formData.get("costRisk"),
     scheduleRisk: formData.get("scheduleRisk"),
   });
@@ -264,6 +267,8 @@ export async function createIssue(formData: FormData): Promise<void> {
     zone_id: parsed.data.zoneId,
     trade_id: parsed.data.tradeId,
     contract_item_id: parsed.data.contractItemId,
+    responsible_user_id: parsed.data.responsibleUserId,
+    approver_user_id: parsed.data.approverUserId,
     cost_risk: parsed.data.costRisk,
     schedule_risk: parsed.data.scheduleRisk,
     created_by: user.id,
@@ -290,6 +295,8 @@ export async function createIssue(formData: FormData): Promise<void> {
       reviewState: row.review_state,
       source: row.source,
       visitId: row.visit_id,
+      responsibleUserId: row.responsible_user_id,
+      approverUserId: row.approver_user_id,
     },
   });
 
@@ -321,6 +328,8 @@ export async function createDecision(formData: FormData): Promise<void> {
     visitId: formData.get("visitId"),
     zoneId: formData.get("zoneId"),
     tradeId: formData.get("tradeId"),
+    responsibleUserId: formData.get("responsibleUserId"),
+    approverUserId: formData.get("approverUserId"),
     deadline: formData.get("deadline"),
     optionsText: formData.get("optionsText"),
     recommendation: formData.get("recommendation"),
@@ -347,6 +356,8 @@ export async function createDecision(formData: FormData): Promise<void> {
     source: "human",
     zone_id: parsed.data.zoneId,
     trade_id: parsed.data.tradeId,
+    responsible_user_id: parsed.data.responsibleUserId,
+    approver_user_id: parsed.data.approverUserId,
     deadline: parsed.data.deadline,
     options: optionsFromText(parsed.data.optionsText),
     recommendation: parsed.data.recommendation,
@@ -380,6 +391,8 @@ export async function createDecision(formData: FormData): Promise<void> {
       reviewState: row.review_state,
       source: row.source,
       visitId: row.visit_id,
+      responsibleUserId: row.responsible_user_id,
+      approverUserId: row.approver_user_id,
     },
   });
 
@@ -505,6 +518,8 @@ export async function reviewIssue(formData: FormData): Promise<void> {
     zoneId: formData.get("zoneId"),
     tradeId: formData.get("tradeId"),
     contractItemId: formData.get("contractItemId"),
+    responsibleUserId: formData.get("responsibleUserId"),
+    approverUserId: formData.get("approverUserId"),
     costRisk: formData.get("costRisk"),
     scheduleRisk: formData.get("scheduleRisk"),
   });
@@ -515,7 +530,7 @@ export async function reviewIssue(formData: FormData): Promise<void> {
 
   const { data: issue, error: issueError } = await supabase
     .from("issues")
-    .select("id, visit_id, source, review_state, status")
+    .select("id, visit_id, source, review_state, status, responsible_user_id, approver_user_id")
     .eq("id", issueId)
     .eq("project_id", projectId)
     .maybeSingle();
@@ -548,6 +563,8 @@ export async function reviewIssue(formData: FormData): Promise<void> {
     changes.zone_id = parsed.data.zoneId;
     changes.trade_id = parsed.data.tradeId;
     changes.contract_item_id = parsed.data.contractItemId;
+    changes.responsible_user_id = parsed.data.responsibleUserId;
+    changes.approver_user_id = parsed.data.approverUserId;
     changes.cost_risk = parsed.data.costRisk;
     changes.schedule_risk = parsed.data.scheduleRisk;
     changes.status = "open";
@@ -579,6 +596,16 @@ export async function reviewIssue(formData: FormData): Promise<void> {
       previousReviewState: issue.review_state,
       newStatus: changes.status ?? null,
       newReviewState: changes.review_state ?? null,
+      previousResponsibleUserId: issue.responsible_user_id,
+      newResponsibleUserId:
+        action === "close" || action === "reject"
+          ? issue.responsible_user_id
+          : parsed.data.responsibleUserId,
+      previousApproverUserId: issue.approver_user_id,
+      newApproverUserId:
+        action === "close" || action === "reject"
+          ? issue.approver_user_id
+          : parsed.data.approverUserId,
     },
   });
 
@@ -588,14 +615,95 @@ export async function reviewIssue(formData: FormData): Promise<void> {
 
   revalidatePath(`/projects/${projectId}`);
   if (issue.visit_id) revalidatePath(`/projects/${projectId}/visits/${issue.visit_id}`);
+  const successMessage =
+    action === "close"
+      ? "Issue closed."
+      : action === "approve"
+        ? "Issue approved."
+        : action === "reject"
+          ? "Issue rejected."
+          : "Issue changes saved.";
   reviewRedirect(
     target,
-    { ok: "Issue review saved." },
+    { ok: successMessage },
     target.kind === "visit" && (action === "close" || action === "reject")
       ? "visit-open-issues"
       : target.kind === "visit"
         ? `issue-${issueId}`
-        : undefined,
+        : action === "close" || action === "approve" || action === "reject"
+          ? "open-issues"
+          : `issue-${issueId}`,
+  );
+}
+
+export async function reopenIssue(formData: FormData): Promise<void> {
+  const projectId = requireProjectId(formData);
+  const target = readReturnTarget(formData, projectId);
+  const issueId = requireUuid(formData, "issueId", target);
+  const { supabase, user } = await requireUser();
+  const parsed = issueStatusTransitionSchema.safeParse({ status: formData.get("status") });
+
+  if (!parsed.success || parsed.data.status !== "open") {
+    reviewRedirect(target, { error: "Invalid issue status transition." }, "closed-issues");
+  }
+
+  const { data: issue, error: issueError } = await supabase
+    .from("issues")
+    .select("id, visit_id, status, review_state")
+    .eq("id", issueId)
+    .eq("project_id", projectId)
+    .maybeSingle();
+
+  if (issueError) {
+    reviewRedirect(target, { error: issueError.message }, "closed-issues");
+  }
+  if (!issue) {
+    reviewRedirect(target, { error: "Issue not found." }, "closed-issues");
+  }
+  if (issue.status !== "closed") {
+    reviewRedirect(target, { error: "Only closed issues can be reopened." }, "closed-issues");
+  }
+
+  const { data, error } = await supabase
+    .from("issues")
+    .update({ status: "open" })
+    .eq("id", issueId)
+    .eq("project_id", projectId)
+    .eq("status", "closed")
+    .select("id");
+
+  if (error) {
+    reviewRedirect(target, { error: error.message }, "closed-issues");
+  }
+  if (!data || data.length === 0) {
+    reviewRedirect(target, {
+      error: "You do not have permission to reopen this issue.",
+    });
+  }
+
+  const auditError = await writeAuditLog({
+    projectId,
+    actorUserId: user.id,
+    action: "issue.reopened",
+    entityType: "issue",
+    entityId: issueId,
+    metadata: {
+      previousStatus: issue.status,
+      newStatus: "open",
+      reviewState: issue.review_state,
+    },
+  });
+
+  if (auditError) {
+    reviewRedirect(target, { error: auditError }, "closed-issues");
+  }
+
+  revalidatePath(`/projects/${projectId}`);
+  if (issue.visit_id) revalidatePath(`/projects/${projectId}/visits/${issue.visit_id}`);
+  reviewRedirect(
+    target,
+    { ok: "Issue reopened." },
+    target.kind === "visit" ? "visit-open-issues" : "open-issues",
   );
 }
 
@@ -611,6 +719,8 @@ export async function reviewDecision(formData: FormData): Promise<void> {
     priority: formData.get("priority"),
     zoneId: formData.get("zoneId"),
     tradeId: formData.get("tradeId"),
+    responsibleUserId: formData.get("responsibleUserId"),
+    approverUserId: formData.get("approverUserId"),
     deadline: formData.get("deadline"),
     optionsText: formData.get("optionsText"),
     recommendation: formData.get("recommendation"),
@@ -624,7 +734,7 @@ export async function reviewDecision(formData: FormData): Promise<void> {
 
   const { data: decision, error: decisionError } = await supabase
     .from("decisions")
-    .select("id, visit_id, source, review_state, status")
+    .select("id, visit_id, source, review_state, status, responsible_user_id, approver_user_id")
     .eq("id", decisionId)
     .eq("project_id", projectId)
     .maybeSingle();
@@ -656,6 +766,8 @@ export async function reviewDecision(formData: FormData): Promise<void> {
     changes.priority = parsed.data.priority;
     changes.zone_id = parsed.data.zoneId;
     changes.trade_id = parsed.data.tradeId;
+    changes.responsible_user_id = parsed.data.responsibleUserId;
+    changes.approver_user_id = parsed.data.approverUserId;
     changes.deadline = parsed.data.deadline;
     changes.options = optionsFromText(parsed.data.optionsText);
     changes.recommendation = parsed.data.recommendation;
@@ -690,6 +802,16 @@ export async function reviewDecision(formData: FormData): Promise<void> {
       previousReviewState: decision.review_state,
       newStatus: changes.status ?? null,
       newReviewState: changes.review_state ?? null,
+      previousResponsibleUserId: decision.responsible_user_id,
+      newResponsibleUserId:
+        action === "close" || action === "reject"
+          ? decision.responsible_user_id
+          : parsed.data.responsibleUserId,
+      previousApproverUserId: decision.approver_user_id,
+      newApproverUserId:
+        action === "close" || action === "reject"
+          ? decision.approver_user_id
+          : parsed.data.approverUserId,
     },
   });
 
@@ -699,13 +821,23 @@ export async function reviewDecision(formData: FormData): Promise<void> {
 
   revalidatePath(`/projects/${projectId}`);
   if (decision.visit_id) revalidatePath(`/projects/${projectId}/visits/${decision.visit_id}`);
+  const successMessage =
+    action === "close"
+      ? "Decision closed."
+      : action === "approve"
+        ? "Decision approved."
+        : action === "reject"
+          ? "Decision rejected."
+          : "Decision changes saved.";
   reviewRedirect(
     target,
-    { ok: "Decision review saved." },
+    { ok: successMessage },
     target.kind === "visit" && (action === "approve" || action === "close" || action === "reject")
       ? "visit-pending-decisions"
       : target.kind === "visit"
         ? `decision-${decisionId}`
-        : undefined,
+        : action === "approve" || action === "close" || action === "reject"
+          ? "pending-decisions"
+          : `decision-${decisionId}`,
   );
 }

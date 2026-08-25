@@ -1,6 +1,5 @@
-import Link from "next/link";
-
 import { loadProjectAccess } from "../../../../lib/project-access";
+import { ProjectBackLink } from "../project-view-shell";
 import { createContractItem, importContractItemsCsv } from "./actions";
 import { BudgetItemAutosaveForm } from "./budget-item-autosave-form";
 
@@ -101,7 +100,11 @@ export default async function BudgetPage({ params, searchParams }: BudgetPagePro
   return (
     <>
       <p>
-        <Link href={`/projects/${project.id}`}>← {project.name}</Link>
+        <ProjectBackLink
+          projectId={project.id}
+          fallbackHref={`/projects/${project.id}`}
+          fallbackLabel={project.name}
+        />
       </p>
       <div className="page-title">
         <div>

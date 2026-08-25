@@ -37,11 +37,12 @@ function visitRedirect(
   projectId: string,
   visitId: string,
   params: { error?: string; ok?: string },
+  hash?: string,
 ): never {
   const query = new URLSearchParams();
   if (params.error) query.set("error", params.error);
   if (params.ok) query.set("ok", params.ok);
-  redirect(`/projects/${projectId}/visits/${visitId}?${query.toString()}`);
+  redirect(`/projects/${projectId}/visits/${visitId}?${query.toString()}${hash ? `#${hash}` : ""}`);
 }
 
 function requireProjectId(formData: FormData): string {
@@ -443,7 +444,7 @@ export async function setVisitStatus(formData: FormData): Promise<void> {
   const parsed = visitStatusTransitionSchema.safeParse({ status: formData.get("status") });
 
   if (!parsed.success) {
-    visitRedirect(projectId, visitId, { error: "Invalid visit status." });
+    visitRedirect(projectId, visitId, { error: "Invalid site update status." }, "finish");
   }
 
   const changes =
@@ -461,12 +462,15 @@ export async function setVisitStatus(formData: FormData): Promise<void> {
     .select("id");
 
   if (error) {
-    visitRedirect(projectId, visitId, { error: error.message });
+    visitRedirect(projectId, visitId, { error: error.message }, "finish");
   }
   if (!data || data.length === 0) {
-    visitRedirect(projectId, visitId, {
-      error: "You do not have permission to change this visit.",
-    });
+    visitRedirect(
+      projectId,
+      visitId,
+      { error: "You do not have permission to change this site update." },
+      "finish",
+    );
   }
 
   const auditAction =
@@ -485,11 +489,17 @@ export async function setVisitStatus(formData: FormData): Promise<void> {
   });
 
   if (auditError) {
-    visitRedirect(projectId, visitId, { error: auditError.message });
+    visitRedirect(projectId, visitId, { error: auditError.message }, "finish");
   }
 
   revalidatePath(`/projects/${projectId}/visits`);
-  visitRedirect(projectId, visitId, { ok: `Visit marked ${parsed.data.status}.` });
+  const message =
+    parsed.data.status === "published"
+      ? "Site update finished."
+      : parsed.data.status === "draft"
+        ? "Site update returned to draft."
+        : "Site update archived.";
+  visitRedirect(projectId, visitId, { ok: message }, "finish");
 }
 
 export async function deleteVisit(formData: FormData): Promise<void> {

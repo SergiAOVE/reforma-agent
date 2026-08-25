@@ -19,6 +19,14 @@
 
 - **apps/web**: UI, authentication, forms, file uploads and dashboards. It never runs long AI
   jobs inside a request; it only enqueues work into `agent_jobs`.
+  `/projects/[projectId]/today` is the role-focused field entry point for site managers. Its
+  server action uses the normal authenticated client and existing visit RLS to resume or create a
+  daily draft; it is not a separate backend or permission path. A shared project layout keeps
+  field navigation active across project routes. Site managers default into field view, while an
+  explicit visit to `Today` stores a project-scoped browser-tab preference in `sessionStorage`.
+  The same layout renders a shallow timeline from `projects.start_date` and
+  `projects.deadline_date` on every project route; visits, decisions and weekly summaries add
+  visual milestones but never define the project deadline.
 - **Supabase**: source of truth. Auth, Postgres with RLS, private Storage.
 - **apps/worker**: processes `agent_jobs` asynchronously (transcription, textual extraction,
   summaries, text-only document intelligence) with locking, retries and idempotency. It uses the
@@ -38,6 +46,8 @@
 1. [ADR-0001](../adr/0001-stack-next-supabase-worker.md) — Next.js + Supabase + separate worker.
 2. [ADR-0002](../adr/0002-no-ai-vision-in-mvp.md) — No AI vision in the MVP.
 3. [ADR-0003](../adr/0003-no-nanoclaw-openclaw-core.md) — No NanoClaw/OpenClaw/Telegram as core.
+4. [ADR-0004](../adr/0004-separate-permissions-from-stakeholder-functions.md) — Permission
+   roles remain separate from real-world project functions.
 
 ## Coupling rules
 
