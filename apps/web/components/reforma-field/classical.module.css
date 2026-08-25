@@ -1,0 +1,424 @@
+/*
+ * Classical — design-system tokens and component classes.
+ *
+ * Ported from the Claude Design handoff bundle
+ * (_ds/classical-2fea9417-ea63-4a5d-ad09-6ec1f366d54d/styles.css).
+ *
+ * The original ships as a global stylesheet that claims `:root`, `body` and the
+ * bare heading elements. `apps/web/app/globals.css` already styles those, so
+ * every rule here is scoped to `.classical` instead: the tokens are declared on
+ * the wrapper and inherit down, and the component classes are hashed by CSS
+ * Modules. Nothing leaks into the product's own styles, and nothing the product
+ * adds later can repaint this prototype.
+ *
+ * The `--color-accent-2-*` ramp is omitted — the system's own readme documents
+ * it as a machine-derived stand-in that reads identically to `--color-accent`,
+ * and this design never references it.
+ */
+
+.classical {
+  --color-bg: #f3f2f2;
+  --color-surface: #eae9e9;
+  --color-text: #201f1d;
+  --color-accent: #b68235;
+  --color-divider: color-mix(in srgb, #201f1d 16%, transparent);
+
+  /* Tonal ramps — generated in OKLCH on one shared lightness scale, so the
+     same step of any role matches the others in visual value. */
+  --color-neutral-100: #f8f4f4;
+  --color-neutral-200: #eae7e7;
+  --color-neutral-300: #d7d3d3;
+  --color-neutral-400: #bab6b6;
+  --color-neutral-500: #9b9797;
+  --color-neutral-600: #7d7979;
+  --color-neutral-700: #605d5d;
+  --color-neutral-800: #444141;
+  --color-neutral-900: #2d2b2b;
+
+  --color-accent-100: #fff3e4;
+  --color-accent-200: #ffe3bf;
+  --color-accent-300: #facb8d;
+  --color-accent-400: #e1ad66;
+  --color-accent-500: #c28d41;
+  --color-accent-600: #a06f24;
+  --color-accent-700: #7d5411;
+  --color-accent-800: #5a3b0a;
+  --color-accent-900: #3a270d;
+
+  --font-heading: var(--font-cormorant-garamond), system-ui, sans-serif;
+  /* review round 3: bold retired — semibold is the interface headings' ceiling
+     (they need the weight at small sizes); display text goes lighter still. */
+  --font-heading-weight: 600;
+  --font-body: var(--font-lora), system-ui, sans-serif;
+
+  --space-1: 4.6px;
+  --space-2: 9.2px;
+  --space-3: 13.8px;
+  --space-4: 18.4px;
+  --space-6: 27.6px;
+  --space-8: 36.8px;
+
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 7px;
+
+  /* Elevation — soft ink-tinted shadows tuned to this light ground. */
+  --shadow-sm: 0 1px 2px color-mix(in srgb, #2d2b2b 14%, transparent);
+  --shadow-md: 0 3px 10px color-mix(in srgb, #2d2b2b 16%, transparent);
+  --shadow-lg: 0 12px 32px color-mix(in srgb, #2d2b2b 22%, transparent);
+
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.55;
+  font-weight: 400;
+  /* Classical sets letter-spacing on headings only, so pin the body copy to
+     `normal` rather than inheriting whatever the app's `body` rule tracks. */
+  letter-spacing: normal;
+}
+
+.classical *,
+.classical *::before,
+.classical *::after {
+  box-sizing: border-box;
+}
+
+.classical h1,
+.classical h2,
+.classical h3,
+.classical h4,
+.classical h5,
+.classical h6 {
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
+  line-height: 1.12;
+  letter-spacing: -0.015em;
+  margin: 0 0 var(--space-2);
+  /* `app/globals.css` caps bare headings at `max-width: 12ch` for the product's
+     display type. Scoping only protects the properties this rule declares, so
+     the cap has to be released explicitly — left in, it wraps "Aizkorri
+     Renovation" onto two lines and pushes every screen 37px down. */
+  max-width: none;
+}
+
+.classical h1 {
+  font-size: 42px;
+}
+.classical h2 {
+  font-size: 32px;
+}
+.classical h3 {
+  font-size: 25px;
+}
+.classical h4 {
+  font-size: 20px;
+}
+.classical h5 {
+  font-size: 16px;
+}
+.classical h6 {
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.classical p {
+  margin: 0 0 var(--space-3);
+}
+
+.classical a {
+  color: var(--color-accent);
+  text-underline-offset: 3px;
+}
+.classical a:hover {
+  color: var(--color-accent-700);
+}
+
+.classical img {
+  display: block;
+  max-width: 100%;
+}
+.classical figure {
+  margin: 0;
+}
+.classical figcaption {
+  font-size: 11px;
+  margin-top: var(--space-1);
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+}
+
+.classical :focus {
+  outline: none;
+}
+.classical :focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+.classical ::selection {
+  background: color-mix(in srgb, var(--color-accent) 30%, transparent);
+}
+
+/* — rules — */
+.hr {
+  height: 1px;
+  border: 0;
+  margin: var(--space-4) 0;
+  background: var(--color-divider);
+}
+
+/* — buttons — */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  text-decoration: none;
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
+  font-size: 14px;
+  line-height: 1.2;
+  color: var(--color-text);
+  background: transparent;
+  border: 1px solid transparent;
+  padding: var(--space-2) calc(var(--space-3) * 1.2);
+  border-radius: var(--radius-md);
+}
+.btn svg {
+  display: block;
+}
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btnPrimary {
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+}
+.btnPrimary:hover {
+  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+}
+.btnPrimary:active {
+  background: color-mix(in srgb, var(--color-accent) 22%, transparent);
+}
+
+.btnSecondary {
+  border-color: var(--color-divider);
+}
+.btnSecondary:hover {
+  background: color-mix(in srgb, var(--color-text) 7%, transparent);
+}
+.btnSecondary:active {
+  background: color-mix(in srgb, var(--color-text) 14%, transparent);
+}
+
+.btnGhost {
+  color: var(--color-accent);
+  padding-inline: var(--space-1);
+}
+.btnGhost:hover {
+  background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+}
+.btnGhost:active {
+  background: color-mix(in srgb, var(--color-accent) 18%, transparent);
+}
+
+/* — forms — */
+.input {
+  width: 100%;
+  min-height: 36px;
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--color-text);
+  caret-color: var(--color-accent);
+  background: transparent;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+}
+.input:hover {
+  border-color: color-mix(in srgb, var(--color-text) 45%, transparent);
+}
+.input:focus-visible {
+  border-color: var(--color-accent);
+  outline-offset: 0;
+}
+
+/* — cards — */
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: transparent;
+  border: 1px solid var(--color-divider);
+}
+
+/* — tags — */
+.tag {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  padding: 3px 10px;
+  border-radius: calc(var(--radius-md) * 0.75);
+}
+.tagAccent {
+  background: var(--color-accent-100);
+  color: var(--color-accent-800);
+}
+.tagNeutral {
+  background: var(--color-neutral-100);
+  color: var(--color-neutral-800);
+}
+
+/* — tables — */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.table th {
+  text-align: left;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--color-text) 60%, transparent);
+  padding: var(--space-2);
+  border-bottom: 1px solid var(--color-divider);
+}
+.table td {
+  padding: var(--space-2);
+  border-bottom: 1px solid var(--color-divider);
+}
+.table tbody tr:hover {
+  background: color-mix(in srgb, var(--color-text) 4%, transparent);
+}
+
+/* — imagery — every content photograph is matted like a tipped-in plate — */
+.plate {
+  filter: sepia(0.22) saturate(0.82) contrast(1.05);
+  box-sizing: border-box;
+  border: 6px solid var(--color-surface);
+  outline: 1px solid var(--color-divider);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Prototype-specific classes.
+
+   The design expresses hover states through Claude Design's `style-hover`
+   attribute and animations through inline `animation:` shorthands. Neither
+   survives the move to React — inline styles can't carry a pseudo-class, and
+   CSS Modules hashes `@keyframes` names so an inline `animation: wob …` would
+   reference a name that no longer exists. Both become real classes here.
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* Rows the design draws as clickable `<div onClick>`. Rendered as real buttons
+   so they are keyboard reachable; these resets keep them pixel-identical. */
+.rowButton {
+  width: 100%;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  appearance: none;
+  /* The UA gives every `<button>` `padding: 1px 6px`. Callers that set only
+     `padding-top` would keep the UA's 1px bottom and stand 1px taller than the
+     `<div>` this replaces — visible on the schedule strip, which the design
+     measures at 68px. Zero it here; inline padding still wins. */
+  margin: 0;
+  padding: 0;
+}
+
+/* Today's three capture actions. */
+.quickAction:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+.quickActionAccent:hover {
+  background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+}
+.addPhoto:hover {
+  background: color-mix(in srgb, var(--color-accent) 8%, transparent);
+}
+
+.recordingDot {
+  animation: blink 1.1s infinite;
+}
+
+.wobBar {
+  width: 3px;
+  height: 100%;
+  background: var(--color-accent);
+  transform-origin: bottom;
+  animation: wob 0.9s ease-in-out infinite;
+}
+
+.transcribing {
+  animation: blink 1.4s infinite;
+}
+
+.toast {
+  animation: fadeup 0.25s ease;
+}
+
+.sheet {
+  animation: sheetup 0.28s ease;
+}
+
+@keyframes wob {
+  0%,
+  100% {
+    transform: scaleY(0.25);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+@keyframes fadeup {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+@keyframes sheetup {
+  from {
+    transform: translateY(40px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .classical *,
+  .classical *::before,
+  .classical *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
