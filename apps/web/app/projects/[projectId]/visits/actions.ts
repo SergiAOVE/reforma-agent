@@ -11,7 +11,8 @@ import {
   evidenceTypeFromMimeType,
   transcribeAudioJobInputSchema,
   uuidSchema,
-  type VisitFormInput,
+  type VisitAutosaveFieldsInput,
+  visitAutosaveFieldsSchema,
   visitFormSchema,
   visitTextExtractionJobInputSchema,
   visitTextExtractionJobTypeSchema,
@@ -140,7 +141,6 @@ export interface VisitAutosaveInput {
   visitDate: string;
   generalStatus: string;
   humanNotes: string;
-  summary: string;
   primaryZoneId: string;
   primaryTradeId: string;
 }
@@ -160,49 +160,21 @@ function firstValidationMessage(parsed: {
   return parsed.error.issues[0]?.message ?? "Invalid input.";
 }
 
+/*
+ * The autosave write. It deliberately never touches `summary` or its review
+ * metadata: a visit summary is review-managed content — the worker writes AI
+ * drafts, and reviewSummary() in review-actions.ts performs the explicit
+ * approve/edit/reject with its own audit entry. An earlier version inferred a
+ * review from a changed summary value, which let a stale autosave reject or
+ * rewrite an AI draft attributed to whoever was typing a note
+ * (docs/en/11-field-redesign-integration.md).
+ */
 async function persistVisitUpdate(
   projectId: string,
   visitId: string,
-  values: VisitFormInput,
+  values: VisitAutosaveFieldsInput,
 ): Promise<SaveActionResult> {
-  const { supabase, user } = await requireUser();
-
-  const { data: existingVisit, error: existingVisitError } = await supabase
-    .from("visits")
-    .select("summary, summary_source, summary_review_state, summary_created_by_job_id")
-    .eq("id", visitId)
-    .eq("project_id", projectId)
-    .maybeSingle();
-
-  if (existingVisitError) {
-    return { ok: false, error: existingVisitError.message };
-  }
-  if (!existingVisit) {
-    return { ok: false, error: "Visit not found." };
-  }
-
-  const summaryChanged = values.summary !== existingVisit.summary;
-  let summaryReviewChanges: Record<string, string | null> = {};
-  let newSummaryReviewState: string | null = null;
-
-  if (summaryChanged && existingVisit.summary_source === "ai") {
-    newSummaryReviewState = values.summary ? "edited" : "rejected";
-    summaryReviewChanges = {
-      summary_source: "ai",
-      summary_review_state: newSummaryReviewState,
-      summary_created_by_job_id: values.summary ? existingVisit.summary_created_by_job_id : null,
-      summary_reviewed_by: user.id,
-      summary_reviewed_at: new Date().toISOString(),
-    };
-  } else if (summaryChanged) {
-    summaryReviewChanges = {
-      summary_source: "human",
-      summary_review_state: "human_created",
-      summary_created_by_job_id: null,
-      summary_reviewed_by: null,
-      summary_reviewed_at: null,
-    };
-  }
+  const { supabase } = await requireUser();
 
   const { data, error } = await supabase
     .from("visits")
@@ -210,11 +182,9 @@ async function persistVisitUpdate(
       title: values.title,
       visit_date: values.visitDate,
       general_status: values.generalStatus,
-      summary: values.summary,
       human_notes: values.humanNotes,
       primary_zone_id: values.primaryZoneId,
       primary_trade_id: values.primaryTradeId,
-      ...summaryReviewChanges,
     })
     .eq("id", visitId)
     .eq("project_id", projectId)
@@ -225,24 +195,6 @@ async function persistVisitUpdate(
   }
   if (!data || data.length === 0) {
     return { ok: false, error: "You do not have permission to update this visit." };
-  }
-
-  if (summaryChanged && existingVisit.summary_source === "ai") {
-    const { error: auditError } = await supabase.from("audit_log").insert({
-      project_id: projectId,
-      actor_user_id: user.id,
-      action: values.summary ? "summary.edited" : "summary.rejected",
-      entity_type: "visit",
-      entity_id: visitId,
-      metadata: {
-        previousReviewState: existingVisit.summary_review_state,
-        newReviewState: newSummaryReviewState,
-      },
-    });
-
-    if (auditError) {
-      return { ok: false, error: auditError.message };
-    }
   }
 
   revalidatePath(`/projects/${projectId}/visits`);
@@ -391,25 +343,6 @@ export async function createVisit(formData: FormData): Promise<void> {
   redirect(`/projects/${projectId}/visits/${visit.id}`);
 }
 
-export async function updateVisit(formData: FormData): Promise<void> {
-  const projectId = requireProjectId(formData);
-  const visitId = requireVisitId(formData, projectId);
-  const parsed = readVisitForm(formData);
-
-  if (!parsed.success) {
-    visitRedirect(projectId, visitId, {
-      error: firstValidationMessage(parsed),
-    });
-  }
-
-  const result = await persistVisitUpdate(projectId, visitId, parsed.data);
-  if (!result.ok) {
-    visitRedirect(projectId, visitId, { error: result.error });
-  }
-
-  visitRedirect(projectId, visitId, { ok: result.message });
-}
-
 export async function autosaveVisit(input: VisitAutosaveInput): Promise<SaveActionResult> {
   const projectId = uuidSchema.safeParse(input.projectId);
   if (!projectId.success) {
@@ -420,11 +353,10 @@ export async function autosaveVisit(input: VisitAutosaveInput): Promise<SaveActi
     return { ok: false, error: "Invalid visit." };
   }
 
-  const parsed = visitFormSchema.safeParse({
+  const parsed = visitAutosaveFieldsSchema.safeParse({
     title: input.title,
     visitDate: input.visitDate,
     generalStatus: input.generalStatus,
-    summary: input.summary,
     humanNotes: input.humanNotes,
     primaryZoneId: input.primaryZoneId,
     primaryTradeId: input.primaryTradeId,

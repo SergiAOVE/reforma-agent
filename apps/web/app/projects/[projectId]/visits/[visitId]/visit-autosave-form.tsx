@@ -19,7 +19,6 @@ interface VisitAutosaveFormProps {
     visit_date: string;
     general_status: string | null;
     human_notes: string | null;
-    summary: string | null;
     primary_zone_id: string | null;
     primary_trade_id: string | null;
     updated_at: string;
@@ -71,7 +70,6 @@ export function VisitAutosaveForm({
     visitDate: visit.visit_date,
     generalStatus: visit.general_status ?? "",
     humanNotes: visit.human_notes ?? "",
-    summary: visit.summary ?? "",
     primaryZoneId: visit.primary_zone_id ?? "",
     primaryTradeId: visit.primary_trade_id ?? "",
   };

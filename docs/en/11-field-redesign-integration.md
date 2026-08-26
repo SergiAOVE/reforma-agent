@@ -33,8 +33,8 @@ and a screen with a schema gap can still be a restyle.
    establishes the four-peer-screens model that every later step assumes.
 2. **Today restyle, with a schedule-strip placeholder.** Its "see all" targets exist by now.
 3. **Entry as a new route beside `/visits/[visitId]`.** See
-   [Entry is a rebuild](#entry-is-a-rebuild). Not gated on the autosave bug below once its root
-   fix lands.
+   [Entry is a rebuild](#entry-is-a-rebuild). The autosave bug below is fixed, so this step is
+   not gated on it.
 4. **Budget, Documents and Overview.** Presentation only.
 5. **Phase 15: `schedule_items`, then the Schedule screen and a real health chip.**
 
@@ -103,10 +103,17 @@ Overview as what the owner sees — a read-only weekly summary with an approved 
 worker enqueues behind it would muddle the one screen whose whole identity is that it is the
 client's view. Overview stays read-only.
 
-## A live bug: a note save can review a summary nobody looked at
+## A note save could review a summary nobody looked at (found and fixed)
 
-Found while checking the redesign's dual-write window — but it does not need the redesign. The
-current app triggers it in one tab.
+> **Fixed.** The autosave path no longer reads or writes `summary`:
+> `visitAutosaveFieldsSchema` strips the field at the boundary (covering stale clients that
+> still post it), `persistVisitUpdate` writes only the fields the form owns, dead `updateVisit`
+> is deleted, and explicit summary review lives solely in `reviewSummary`, which carries its own
+> audit entry. Regression tests in `packages/core/src/forms.test.ts` pin the stale-tab save.
+> The rest of this section records the bug as found.
+
+Found while checking the redesign's dual-write window — but it did not need the redesign. The
+app before the fix triggered it in one tab.
 
 `persistVisitUpdate` treats a changed summary as a review action. On every autosave it compares
 the posted summary with the current row; if they differ and the current summary came from AI, it
