@@ -23,6 +23,10 @@ A phase is only marked as completed if the checks (lint, typecheck, test, build)
 - [x] **Phase 14 — Site manager field workflow**: operator-first Today screen, resumable daily
       drafts, simplified reporting steps and mobile navigation.
 
+The `/prototype/reforma-field` design reference is not a phase. Which of its nine screens the
+current schema can already back, and what a Schedule screen would still need, is recorded in
+[docs/en/11-prototype-backing-matrix.md](docs/en/11-prototype-backing-matrix.md).
+
 ## Completed phases log
 
 ### Phase 14 — 2026-08-18

@@ -63,7 +63,9 @@ gateway is documented in [docs/en/08-telegram-gateway.md](docs/en/08-telegram-ga
 the optional NanoClaw gateway is documented in
 [docs/en/09-nanoclaw-gateway.md](docs/en/09-nanoclaw-gateway.md). Optional document
 intelligence is documented in
-[docs/en/10-document-intelligence.md](docs/en/10-document-intelligence.md).
+[docs/en/10-document-intelligence.md](docs/en/10-document-intelligence.md). The design
+prototype's screens are mapped onto the schema in
+[docs/en/11-prototype-backing-matrix.md](docs/en/11-prototype-backing-matrix.md).
 
 ## Project status
 
