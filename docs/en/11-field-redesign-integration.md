@@ -110,7 +110,12 @@ client's view. Overview stays read-only.
 > still post it), `persistVisitUpdate` writes only the fields the form owns, dead `updateVisit`
 > is deleted, and explicit summary review lives solely in `reviewSummary`, which carries its own
 > audit entry. Regression tests in `packages/core/src/forms.test.ts` pin the stale-tab save.
-> The rest of this section records the bug as found.
+> The `updated_at` guard from the fix table has landed too: autosave echoes the last-seen
+> `updated_at`, a save against a newer row is rejected instead of silently reverting it, and the
+> save-state row shows "This update changed elsewhere — reload". The conflict-versus-permission
+> split is pinned by `apps/web/lib/visit-autosave-conflict.test.ts`. Only the Entry narrow write
+> action remains, for when that route is built. The rest of this section records the bug as
+> found.
 
 Found while checking the redesign's dual-write window — but it did not need the redesign. The
 app before the fix triggered it in one tab.

@@ -13,6 +13,7 @@ import {
   uuidSchema,
   type VisitAutosaveFieldsInput,
   visitAutosaveFieldsSchema,
+  visitAutosaveTokenSchema,
   visitFormSchema,
   visitTextExtractionJobInputSchema,
   visitTextExtractionJobTypeSchema,
@@ -26,6 +27,7 @@ import {
   MAX_EVIDENCE_UPLOAD_BYTES,
   VISIT_EVIDENCE_BUCKET,
 } from "../../../../lib/storage";
+import { classifyGuardedVisitWrite } from "../../../../lib/visit-autosave-conflict";
 
 function visitsRedirect(projectId: string, params: { error?: string; ok?: string }): never {
   const query = new URLSearchParams();
@@ -137,6 +139,8 @@ async function assertVisitBelongsToProject(projectId: string, visitId: string): 
 export interface VisitAutosaveInput {
   projectId: string;
   visitId: string;
+  /** `visits.updated_at` as last returned by the server, echoed verbatim. */
+  lastSavedAt: string;
   title: string;
   visitDate: string;
   generalStatus: string;
@@ -147,7 +151,7 @@ export interface VisitAutosaveInput {
 
 export type SaveActionResult =
   | { ok: true; savedAt: string; message: string }
-  | { ok: false; error: string; savedAt?: string; message?: string };
+  | { ok: false; error: string; conflict?: boolean; savedAt?: string; message?: string };
 
 export type UploadEvidenceBatchResult =
   | { ok: true; savedAt: string; uploadedCount: number; message: string }
@@ -168,11 +172,17 @@ function firstValidationMessage(parsed: {
  * review from a changed summary value, which let a stale autosave reject or
  * rewrite an AI draft attributed to whoever was typing a note
  * (docs/en/11-field-redesign-integration.md).
+ *
+ * The update is also guarded by the last `updated_at` the client saw, so a
+ * stale tab cannot silently revert fields that changed elsewhere. See
+ * classifyGuardedVisitWrite for how the zero-row case splits into conflict
+ * versus permission.
  */
 async function persistVisitUpdate(
   projectId: string,
   visitId: string,
   values: VisitAutosaveFieldsInput,
+  lastSavedAt: string,
 ): Promise<SaveActionResult> {
   const { supabase } = await requireUser();
 
@@ -188,12 +198,33 @@ async function persistVisitUpdate(
     })
     .eq("id", visitId)
     .eq("project_id", projectId)
+    .eq("updated_at", lastSavedAt)
     .select("id, updated_at");
 
   if (error) {
     return { ok: false, error: error.message };
   }
-  if (!data || data.length === 0) {
+
+  let outcome = classifyGuardedVisitWrite(data?.[0] ?? null, null, lastSavedAt);
+
+  if (outcome.kind === "denied") {
+    const { data: currentRow, error: currentError } = await supabase
+      .from("visits")
+      .select("updated_at")
+      .eq("id", visitId)
+      .eq("project_id", projectId)
+      .maybeSingle();
+
+    if (currentError) {
+      return { ok: false, error: currentError.message };
+    }
+    outcome = classifyGuardedVisitWrite(null, currentRow ?? null, lastSavedAt);
+  }
+
+  if (outcome.kind === "conflict") {
+    return { ok: false, conflict: true, error: "This update changed elsewhere — reload." };
+  }
+  if (outcome.kind === "denied") {
     return { ok: false, error: "You do not have permission to update this visit." };
   }
 
@@ -202,7 +233,7 @@ async function persistVisitUpdate(
 
   return {
     ok: true,
-    savedAt: data[0]?.updated_at ?? new Date().toISOString(),
+    savedAt: outcome.savedAt,
     message: "Visit saved.",
   };
 }
@@ -352,6 +383,10 @@ export async function autosaveVisit(input: VisitAutosaveInput): Promise<SaveActi
   if (!visitId.success) {
     return { ok: false, error: "Invalid visit." };
   }
+  const lastSavedAt = visitAutosaveTokenSchema.safeParse(input.lastSavedAt);
+  if (!lastSavedAt.success) {
+    return { ok: false, error: "Invalid save token. Reload this page." };
+  }
 
   const parsed = visitAutosaveFieldsSchema.safeParse({
     title: input.title,
@@ -366,7 +401,7 @@ export async function autosaveVisit(input: VisitAutosaveInput): Promise<SaveActi
     return { ok: false, error: firstValidationMessage(parsed) };
   }
 
-  return persistVisitUpdate(projectId.data, visitId.data, parsed.data);
+  return persistVisitUpdate(projectId.data, visitId.data, parsed.data, lastSavedAt.data);
 }
 
 export async function setVisitStatus(formData: FormData): Promise<void> {

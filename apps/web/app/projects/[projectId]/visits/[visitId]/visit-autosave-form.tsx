@@ -9,7 +9,7 @@ interface SelectOption {
   name: string;
 }
 
-type VisitAutosaveFields = Omit<VisitAutosaveInput, "projectId" | "visitId">;
+type VisitAutosaveFields = Omit<VisitAutosaveInput, "projectId" | "visitId" | "lastSavedAt">;
 
 interface VisitAutosaveFormProps {
   projectId: string;
@@ -32,7 +32,8 @@ type SaveState =
   | { status: "saved"; savedAt: string; message?: string }
   | { status: "dirty"; savedAt?: string }
   | { status: "saving"; savedAt?: string }
-  | { status: "error"; error: string; savedAt?: string };
+  | { status: "error"; error: string; savedAt?: string }
+  | { status: "conflict"; savedAt?: string };
 
 function serializeFields(fields: VisitAutosaveFields): string {
   return JSON.stringify(fields);
@@ -52,6 +53,7 @@ function saveStateText(state: SaveState): string {
   if (state.status === "dirty")
     return savedTime ? `Unsaved changes - Last saved ${savedTime}` : "Unsaved changes";
   if (state.status === "error") return `Save failed: ${state.error}`;
+  if (state.status === "conflict") return "This update changed elsewhere — reload.";
   return (
     state.message ??
     (savedTime ? `All changes saved - Last saved ${savedTime}` : "All changes saved")
@@ -81,7 +83,9 @@ export function VisitAutosaveForm({
   });
   const latestFieldsRef = useRef(fields);
   const savedSnapshotRef = useRef(serializeFields(initialFields));
-  const requestIdRef = useRef(0);
+  const inFlightRef = useRef(false);
+  const queuedRef = useRef(false);
+  const conflictRef = useRef(false);
   const lastSavedAtRef = useRef(visit.updated_at);
 
   useEffect(() => {
@@ -92,68 +96,93 @@ export function VisitAutosaveForm({
     setFields((current) => ({ ...current, [name]: value }));
   };
 
+  /*
+   * Saves are serialized. Each save carries the concurrency token the previous
+   * one returned, so two saves on the wire at once would race: the second
+   * would echo the token the first is about to replace and be rejected as a
+   * conflict that never happened. A save requested while one is in flight
+   * queues a re-run that picks up the fresh token and the latest fields.
+   */
   const saveCurrentFields = useCallback(async () => {
-    if (!canEdit) return;
-
-    const payload = latestFieldsRef.current;
-    if (payload.title.trim().length === 0) {
-      setSaveState({
-        status: "error",
-        error: "Add a title before saving.",
-        savedAt: lastSavedAtRef.current,
-      });
-      return;
-    }
-    if (payload.visitDate.trim().length === 0) {
-      setSaveState({
-        status: "error",
-        error: "Choose a visit date before saving.",
-        savedAt: lastSavedAtRef.current,
-      });
+    if (!canEdit || conflictRef.current) return;
+    if (inFlightRef.current) {
+      queuedRef.current = true;
       return;
     }
 
-    const requestId = requestIdRef.current + 1;
-    requestIdRef.current = requestId;
-    setSaveState((current) => ({ status: "saving", savedAt: current.savedAt }));
+    inFlightRef.current = true;
+    try {
+      do {
+        queuedRef.current = false;
 
-    const result = await autosaveVisit({
-      projectId,
-      visitId: visit.id,
-      ...payload,
-    });
+        const payload = latestFieldsRef.current;
+        if (payload.title.trim().length === 0) {
+          setSaveState({
+            status: "error",
+            error: "Add a title before saving.",
+            savedAt: lastSavedAtRef.current,
+          });
+          return;
+        }
+        if (payload.visitDate.trim().length === 0) {
+          setSaveState({
+            status: "error",
+            error: "Choose a visit date before saving.",
+            savedAt: lastSavedAtRef.current,
+          });
+          return;
+        }
 
-    if (requestId !== requestIdRef.current) return;
+        setSaveState((current) => ({ status: "saving", savedAt: current.savedAt }));
 
-    if (!result.ok) {
-      setSaveState((current) => ({
-        status: "error",
-        error: result.error,
-        savedAt: current.savedAt,
-      }));
-      return;
-    }
+        const result = await autosaveVisit({
+          projectId,
+          visitId: visit.id,
+          lastSavedAt: lastSavedAtRef.current,
+          ...payload,
+        });
 
-    const savedSnapshot = serializeFields(payload);
-    savedSnapshotRef.current = savedSnapshot;
-    lastSavedAtRef.current = result.savedAt;
+        if (!result.ok) {
+          if (result.conflict) {
+            conflictRef.current = true;
+            setSaveState({ status: "conflict", savedAt: lastSavedAtRef.current });
+            return;
+          }
+          setSaveState((current) => ({
+            status: "error",
+            error: result.error,
+            savedAt: current.savedAt,
+          }));
+          return;
+        }
 
-    if (serializeFields(latestFieldsRef.current) === savedSnapshot) {
-      setSaveState({
-        status: "saved",
-        savedAt: result.savedAt,
-        message: `Saved just now - Last saved ${formatSavedTime(result.savedAt)}`,
-      });
-    } else {
-      setSaveState({
-        status: "dirty",
-        savedAt: result.savedAt,
-      });
+        const savedSnapshot = serializeFields(payload);
+        savedSnapshotRef.current = savedSnapshot;
+        lastSavedAtRef.current = result.savedAt;
+
+        if (serializeFields(latestFieldsRef.current) === savedSnapshot) {
+          setSaveState({
+            status: "saved",
+            savedAt: result.savedAt,
+            message: `Saved just now - Last saved ${formatSavedTime(result.savedAt)}`,
+          });
+        } else {
+          setSaveState({
+            status: "dirty",
+            savedAt: result.savedAt,
+          });
+        }
+      } while (queuedRef.current);
+    } finally {
+      inFlightRef.current = false;
     }
   }, [canEdit, projectId, visit.id]);
 
   useEffect(() => {
     if (!canEdit) return;
+    // After a conflict, stop autosaving and keep the reload notice up: every
+    // further save would fail against the newer row until the page reloads.
+    if (conflictRef.current) return;
 
     const currentSnapshot = serializeFields(fields);
     if (currentSnapshot === savedSnapshotRef.current) return;
@@ -180,7 +209,9 @@ export function VisitAutosaveForm({
       <div className="form-status-row">
         <strong>Site update</strong>
         <span
-          className={`save-state ${saveState.status === "error" ? "error" : ""}`}
+          className={`save-state ${
+            saveState.status === "error" || saveState.status === "conflict" ? "error" : ""
+          }`}
           role="status"
           aria-live="polite"
         >

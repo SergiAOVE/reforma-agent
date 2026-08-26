@@ -22,6 +22,7 @@ import {
   summaryReviewFormSchema,
   updateMemberStakeholderSchema,
   visitAutosaveFieldsSchema,
+  visitAutosaveTokenSchema,
   visitFormSchema,
   visitStatusTransitionSchema,
   weeklySummaryRequestSchema,
@@ -357,6 +358,19 @@ describe("visitAutosaveFieldsSchema", () => {
     });
 
     expect(parsed).not.toHaveProperty("summary");
+  });
+});
+
+describe("visitAutosaveTokenSchema", () => {
+  it("accepts a server-issued timestamp and trims surrounding whitespace", () => {
+    expect(visitAutosaveTokenSchema.parse(" 2026-08-26T09:00:00.123456+00:00 ")).toBe(
+      "2026-08-26T09:00:00.123456+00:00",
+    );
+  });
+
+  it("rejects an empty token", () => {
+    expect(visitAutosaveTokenSchema.safeParse("").success).toBe(false);
+    expect(visitAutosaveTokenSchema.safeParse("   ").success).toBe(false);
   });
 });
 

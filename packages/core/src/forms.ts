@@ -150,6 +150,13 @@ export type VisitFormInput = z.infer<typeof visitFormSchema>;
 export const visitAutosaveFieldsSchema = visitFormSchema.omit({ summary: true });
 export type VisitAutosaveFieldsInput = z.infer<typeof visitAutosaveFieldsSchema>;
 
+/**
+ * The autosave concurrency token: `visits.updated_at` exactly as the server
+ * last returned it. Opaque to clients — the database compares it against the
+ * current row, so it must be echoed verbatim, never reformatted.
+ */
+export const visitAutosaveTokenSchema = nonEmptyStringSchema.max(64);
+
 export const SITE_UPDATE_DESTINATIONS = ["update", "files", "issue", "decision"] as const;
 export const siteUpdateStartSchema = z.object({
   projectId: uuidSchema,
