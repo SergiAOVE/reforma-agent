@@ -33,7 +33,8 @@ and a screen with a schema gap can still be a restyle.
    establishes the four-peer-screens model that every later step assumes.
 2. **Today restyle, with a schedule-strip placeholder.** Its "see all" targets exist by now.
 3. **Entry as a new route beside `/visits/[visitId]`.** See
-   [Entry is a rebuild](#entry-is-a-rebuild) and [Before you start](#before-you-start).
+   [Entry is a rebuild](#entry-is-a-rebuild). Not gated on the autosave bug below once its root
+   fix lands.
 4. **Budget, Documents and Overview.** Presentation only.
 5. **Phase 15: `schedule_items`, then the Schedule screen and a real health chip.**
 
@@ -102,9 +103,53 @@ Overview as what the owner sees — a read-only weekly summary with an approved 
 worker enqueues behind it would muddle the one screen whose whole identity is that it is the
 client's view. Overview stays read-only.
 
+## A live bug: a note save can review a summary nobody looked at
+
+Found while checking the redesign's dual-write window — but it does not need the redesign. The
+current app triggers it in one tab.
+
+`persistVisitUpdate` treats a changed summary as a review action. On every autosave it compares
+the posted summary with the current row; if they differ and the current summary came from AI, it
+flips `summary_review_state` — `edited` when the posted text is non-empty, `rejected` when it is
+empty — stamps `summary_reviewed_by` with the current user, overwrites the summary text, and
+writes an `audit_log` entry: `summary.edited` or `summary.rejected`, with `actor_user_id` set to
+whoever saved (`apps/web/app/projects/[projectId]/visits/actions.ts`, line 231).
+
+Every firing of that branch is a bug, because no legitimate edit can reach it. The only live
+caller of `persistVisitUpdate` is the autosave form — `updateVisit`, the other route in, has no
+callers at all — and that form renders no summary editor while posting the summary it loaded on
+every save. A posted summary that differs from the current one can only mean the tab is stale.
+
+Reproduction, one person, one tab:
+
+1. Open a visit before it has a summary. The form freezes `summary = ""`.
+2. Enqueue **Generate summary** from the same page's advanced tools, and keep typing notes.
+3. The worker completes and writes the AI draft.
+4. The next autosave — 800 ms after any keystroke — posts the frozen empty summary. The draft
+   text is destroyed, `summary_created_by_job_id` is nulled, the review state becomes `rejected`,
+   and the audit log records `summary.rejected` by the person typing.
+
+The two-tab variant undoes reviews instead: a summary approved elsewhere is reverted to the
+stale text, flipped to `edited`, and re-attributed to the note-editor.
+
+The audit entry is the worst part. The trail now contains a review that a named person never
+performed — in a system whose job is recording who decided what on a construction contract, that
+is worse than the lost field.
+
+### The fix, in order
+
+| Fix                                                                                                                                                                                                                                                    | Scope                                   | Priority                                                                   |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------- | -------------------------------------------------------------------------- |
+| Review state changes only through an explicit review action, never inferred from a changed value. Concretely, `persistVisitUpdate` stops reading or writing `summary`; explicit edits already have `reviewSummary`, which carries its own audit write. | Everywhere, including the current route | Root fix — first                                                           |
+| Entry gets a narrow write action that touches only the fields it owns.                                                                                                                                                                                 | The new route                           | Do anyway; with the root fix in, an optimization, not a safety requirement |
+| An `updated_at` guard or optimistic concurrency on visit autosave.                                                                                                                                                                                     | Everywhere                              | Secondary — stops a stale tab silently reverting title, date, zone, trade  |
+
+With the root fix in, step 3 of the sequence stops being gated on this and becomes a normal
+build.
+
 ## Before you start
 
-Two things to decide deliberately rather than discover.
+One thing to decide deliberately rather than discover.
 
 ### The hashes being retired have exactly one producer
 
@@ -120,28 +165,6 @@ audit surface is small:
 No page other than the nav itself links to `#attention` or `#more`, so retiring them touches the
 nav, the helper and one test. The deep links into a visit are the shareable ones: if any have been
 bookmarked, they need redirects rather than silently landing on the wrong tab.
-
-### Autosave writes the whole row, so the dual-write window is wider than it looks
-
-Running Entry beside `/visits/[visitId]` means two routes autosaving the same `visits` row. This
-is worse than last-write-wins on the field being edited:
-
-- The client sends **all seven fields** on every save — title, date, general status, human notes,
-  summary, zone and trade — not a patch of what changed.
-- The server action updates **every one of those columns unconditionally**, matching only on visit
-  id and project id. There is no `updated_at` guard and no optimistic concurrency.
-
-So a stale tab does not merely overwrite the note. It reverts the title, date, zone, trade and
-general status to whatever that tab loaded.
-
-**The sharp edge is `summary`.** The save path treats a changed summary as a review action: if the
-existing summary came from AI, it rewrites `summary_review_state` and stamps `summary_reviewed_by`
-with the current user. An Entry route that does not show the summary field but still posts it —
-empty, or stale — would silently mark an AI summary draft rejected, attributed to whoever happened
-to be typing a site note.
-
-Decide before building Entry whether it reuses that action or gets a narrow one that writes only
-the fields it owns. A narrow write is also what makes the dual-write window survivable.
 
 ## The nine screens in detail
 
