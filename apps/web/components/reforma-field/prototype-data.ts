@@ -217,8 +217,7 @@ export const UPCOMING = (
   ] as const
 ).map((u) => ({ ...u, ...UPCOMING_KIND[u.kind] }));
 
-export type ToolAction =
-  { type: "nav"; screen: Screen } | { type: "toast"; message: string };
+export type ToolAction = { type: "nav"; screen: Screen } | { type: "toast"; message: string };
 
 export const TOOLS: {
   name: string;

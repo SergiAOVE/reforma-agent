@@ -12,9 +12,7 @@ import {
 
 describe("entryExcerpt", () => {
   it("falls back to the empty-state line", () => {
-    expect(entryExcerpt("")).toBe(
-      "Nothing recorded yet — write, speak or shoot.",
-    );
+    expect(entryExcerpt("")).toBe("Nothing recorded yet — write, speak or shoot.");
   });
 
   it("passes a short note through untouched", () => {

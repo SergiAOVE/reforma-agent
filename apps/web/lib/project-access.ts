@@ -39,9 +39,7 @@ export const loadProjectAccess = cache(async function loadProjectAccess(
 
   const { data: project } = await supabase
     .from("projects")
-    .select(
-      "id, name, address_label, description, status, created_at, start_date, deadline_date",
-    )
+    .select("id, name, address_label, description, status, created_at, start_date, deadline_date")
     .eq("id", projectId)
     .maybeSingle();
 

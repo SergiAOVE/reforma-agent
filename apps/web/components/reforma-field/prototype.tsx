@@ -72,8 +72,7 @@ import {
 } from "./prototype-data";
 
 /** `color-mix` against the ink, the design's one-off muting device. */
-const mut = (pct: number) =>
-  `color-mix(in srgb,var(--color-text) ${pct}%, transparent)`;
+const mut = (pct: number) => `color-mix(in srgb,var(--color-text) ${pct}%, transparent)`;
 
 const KICKER: React.CSSProperties = {
   fontSize: 11,
@@ -164,9 +163,7 @@ export function ReformaFieldPrototype({
   const [screen, setScreen] = useState<Screen>(startScreen);
   const [sheet, setSheet] = useState<Sheet | null>(null);
   const [note, setNote] = useState(dayState === "fresh" ? "" : SEED_NOTE);
-  const [photos, setPhotos] = useState<Photo[]>(
-    dayState === "fresh" ? [] : SEED_PHOTOS,
-  );
+  const [photos, setPhotos] = useState<Photo[]>(dayState === "fresh" ? [] : SEED_PHOTOS);
   const [voiceNotes, setVoiceNotes] = useState(dayState === "fresh" ? 0 : 1);
   const [entryDone, setEntryDone] = useState(dayState === "finished");
   const [savedLabel, setSavedLabel] = useState(
@@ -260,13 +257,9 @@ export function ReformaFieldPrototype({
   const resolveItem = useCallback(
     (id: number) => {
       const it = attention.find((i) => i.id === id);
-      setAttention((prev) =>
-        prev.map((i) => (i.id === id ? { ...i, done: !i.done } : i)),
-      );
+      setAttention((prev) => prev.map((i) => (i.id === id ? { ...i, done: !i.done } : i)));
       if (it && !it.done) {
-        showToast(
-          it.type === "issue" ? "Problem marked resolved" : "Owner reminded",
-        );
+        showToast(it.type === "issue" ? "Problem marked resolved" : "Owner reminded");
       }
     },
     [attention, showToast],
@@ -343,22 +336,12 @@ export function ReformaFieldPrototype({
     ...it,
     d: it.type === "issue" ? ISSUE_D : DECISION_D,
     iconColor: it.type === "issue" ? ACCENT_700 : "#605d5d",
-    tagBorder:
-      it.tag === "High"
-        ? ACCENT
-        : "color-mix(in srgb,#201f1d 16%, transparent)",
+    tagBorder: it.tag === "High" ? ACCENT : "color-mix(in srgb,#201f1d 16%, transparent)",
     tagColor: it.tag === "High" ? ACCENT_700 : MUTED,
-    tagBg:
-      it.tag === "High"
-        ? "color-mix(in srgb,#b68235 10%, transparent)"
-        : "transparent",
+    tagBg: it.tag === "High" ? "color-mix(in srgb,#b68235 10%, transparent)" : "transparent",
     deco: it.done ? "line-through" : "none",
     opacity: it.done ? 0.45 : 1,
-    action: it.done
-      ? "Undo"
-      : it.type === "issue"
-        ? "Mark resolved"
-        : "Remind the owner",
+    action: it.done ? "Undo" : it.type === "issue" ? "Mark resolved" : "Remind the owner",
   }));
   const attnTop = decorated.filter((i) => !i.done).slice(0, 2);
   const attnSummary =
@@ -452,9 +435,7 @@ export function ReformaFieldPrototype({
           {screen === "today" && (
             <div>
               <div style={{ ...KICKER, ...TNUM }}>Tuesday · 25 August 2026</div>
-              <h1
-                style={{ fontSize: 34, lineHeight: 1.08, margin: "6px 0 4px" }}
-              >
+              <h1 style={{ fontSize: 34, lineHeight: 1.08, margin: "6px 0 4px" }}>
                 Aizkorri Renovation
               </h1>
               <div
@@ -538,14 +519,7 @@ export function ReformaFieldPrototype({
                     stroke="var(--color-divider)"
                     strokeWidth="1"
                   />
-                  <line
-                    x1="0"
-                    y1="9"
-                    x2={sched.x}
-                    y2="9"
-                    stroke={sched.color}
-                    strokeWidth="1.5"
-                  />
+                  <line x1="0" y1="9" x2={sched.x} y2="9" stroke={sched.color} strokeWidth="1.5" />
                   <circle cx="2" cy="9" r="2.5" fill={sched.color} />
                   <rect
                     x={schedDx}
@@ -555,14 +529,7 @@ export function ReformaFieldPrototype({
                     transform={`rotate(45 ${sched.x} 9)`}
                     fill={sched.color}
                   />
-                  <circle
-                    cx="317"
-                    cy="9"
-                    r="2.5"
-                    fill="none"
-                    stroke={mut(40)}
-                    strokeWidth="1.5"
-                  />
+                  <circle cx="317" cy="9" r="2.5" fill="none" stroke={mut(40)} strokeWidth="1.5" />
                 </svg>
                 <div
                   style={{
@@ -574,9 +541,7 @@ export function ReformaFieldPrototype({
                   }}
                 >
                   <span>12 May</span>
-                  <span style={{ color: sched.dark, fontWeight: 600 }}>
-                    {sched.note}
-                  </span>
+                  <span style={{ color: sched.dark, fontWeight: 600 }}>{sched.note}</span>
                   <span>30 Nov</span>
                 </div>
               </button>
@@ -592,18 +557,11 @@ export function ReformaFieldPrototype({
                   marginBottom: 8,
                 }}
               >
-                <div style={{ ...KICKER, fontSize: 10 }}>
-                  Today’s entry · № 14
-                </div>
-                <div style={{ fontSize: 11, color: mut(50), ...TNUM }}>
-                  {savedLabel}
-                </div>
+                <div style={{ ...KICKER, fontSize: 10 }}>Today’s entry · № 14</div>
+                <div style={{ fontSize: 11, color: mut(50), ...TNUM }}>{savedLabel}</div>
               </div>
 
-              <div
-                className={styles.card}
-                style={{ gap: 10, padding: "var(--space-4)" }}
-              >
+              <div className={styles.card} style={{ gap: 10, padding: "var(--space-4)" }}>
                 {entryDone && (
                   <div
                     style={{
@@ -618,9 +576,7 @@ export function ReformaFieldPrototype({
                     Finished and shared with the project team.
                   </div>
                 )}
-                <p style={{ margin: 0, fontSize: 14.5, lineHeight: 1.6 }}>
-                  {excerpt}
-                </p>
+                <p style={{ margin: 0, fontSize: 14.5, lineHeight: 1.6 }}>{excerpt}</p>
                 <div
                   style={{
                     display: "flex",
@@ -735,12 +691,7 @@ export function ReformaFieldPrototype({
                     cursor: "pointer",
                   }}
                 >
-                  <PathIcon
-                    size={18}
-                    d={it.d}
-                    stroke={it.iconColor}
-                    strokeWidth={1.6}
-                  />
+                  <PathIcon size={18} d={it.d} stroke={it.iconColor} strokeWidth={1.6} />
                   <span style={{ display: "grid", gap: 1, minWidth: 0 }}>
                     <strong
                       style={{
@@ -752,9 +703,7 @@ export function ReformaFieldPrototype({
                     >
                       {it.title}
                     </strong>
-                    <span style={{ fontSize: 11.5, color: mut(55) }}>
-                      {it.meta}
-                    </span>
+                    <span style={{ fontSize: 11.5, color: mut(55) }}>{it.meta}</span>
                   </span>
                   <span
                     className={styles.tag}
@@ -810,9 +759,7 @@ export function ReformaFieldPrototype({
                     >
                       {r.title}
                     </span>
-                    <span style={{ fontSize: 11.5, color: mut(55), ...TNUM }}>
-                      {r.meta}
-                    </span>
+                    <span style={{ fontSize: 11.5, color: mut(55), ...TNUM }}>{r.meta}</span>
                   </span>
                   <span
                     style={{
@@ -832,9 +779,7 @@ export function ReformaFieldPrototype({
           {screen === "schedule" && (
             <div>
               {backToToday}
-              <div style={{ ...KICKER, ...TNUM }}>
-                12 May — 30 Nov · 29 weeks
-              </div>
+              <div style={{ ...KICKER, ...TNUM }}>12 May — 30 Nov · 29 weeks</div>
               <h1 style={{ fontSize: 32, margin: "6px 0 2px" }}>Schedule</h1>
               <div
                 style={{
@@ -900,9 +845,7 @@ export function ReformaFieldPrototype({
                       >
                         {ph.name}
                       </span>
-                      <span style={{ fontSize: 9.5, color: mut(50), ...TNUM }}>
-                        {ph.dates}
-                      </span>
+                      <span style={{ fontSize: 9.5, color: mut(50), ...TNUM }}>{ph.dates}</span>
                     </span>
                     <span
                       style={{
@@ -1035,9 +978,7 @@ export function ReformaFieldPrototype({
                     gap: 5,
                   }}
                 >
-                  <span
-                    style={{ width: 1, height: 10, background: sched.color }}
-                  />
+                  <span style={{ width: 1, height: 10, background: sched.color }} />
                   Today
                 </span>
               </div>
@@ -1060,9 +1001,7 @@ export function ReformaFieldPrototype({
                     <span style={{ ...DAY_CELL, fontSize: 19 }}>{u.day}</span>
                     <span style={DOW_CELL}>{u.mon}</span>
                   </span>
-                  <span style={{ fontSize: 13.5, lineHeight: 1.35 }}>
-                    {u.what}
-                  </span>
+                  <span style={{ fontSize: 13.5, lineHeight: 1.35 }}>{u.what}</span>
                   <span
                     className={styles.tag}
                     style={{
@@ -1099,16 +1038,10 @@ export function ReformaFieldPrototype({
                 >
                   <ChevronLeftIcon size={16} /> Today
                 </button>
-                <span style={{ fontSize: 11, color: mut(50), ...TNUM }}>
-                  {savedLabel}
-                </span>
+                <span style={{ fontSize: 11, color: mut(50), ...TNUM }}>{savedLabel}</span>
               </div>
-              <div style={{ ...KICKER, fontSize: 10, ...TNUM }}>
-                Entry № 14 · 25 August
-              </div>
-              <h1 style={{ fontSize: 26, margin: "4px 0 12px" }}>
-                What happened on site?
-              </h1>
+              <div style={{ ...KICKER, fontSize: 10, ...TNUM }}>Entry № 14 · 25 August</div>
+              <h1 style={{ fontSize: 26, margin: "4px 0 12px" }}>What happened on site?</h1>
 
               <textarea
                 value={note}
@@ -1173,9 +1106,7 @@ export function ReformaFieldPrototype({
                       />
                     ))}
                   </span>
-                  <span style={{ ...TNUM, fontSize: 13 }}>
-                    0:{String(recSec).padStart(2, "0")}
-                  </span>
+                  <span style={{ ...TNUM, fontSize: 13 }}>0:{String(recSec).padStart(2, "0")}</span>
                 </div>
               )}
 
@@ -1230,9 +1161,7 @@ export function ReformaFieldPrototype({
                 }}
               >
                 <h2 style={{ fontSize: 20, margin: 0 }}>Photographs</h2>
-                <span style={{ fontSize: 11.5, color: mut(55), ...TNUM }}>
-                  {photoCountLabel}
-                </span>
+                <span style={{ fontSize: 11.5, color: mut(55), ...TNUM }}>{photoCountLabel}</span>
               </div>
               <div
                 style={{
@@ -1277,11 +1206,7 @@ export function ReformaFieldPrototype({
                           "linear-gradient(160deg,var(--color-neutral-300),var(--color-neutral-400))",
                       }}
                     >
-                      <ImageIcon
-                        size={20}
-                        strokeWidth={1.5}
-                        stroke="var(--color-neutral-600)"
-                      />
+                      <ImageIcon size={20} strokeWidth={1.5} stroke="var(--color-neutral-600)" />
                     </div>
                     <figcaption
                       style={{
@@ -1296,9 +1221,7 @@ export function ReformaFieldPrototype({
                 ))}
               </div>
 
-              <h2 style={{ fontSize: 20, margin: "24px 0 8px" }}>
-                Where &amp; what
-              </h2>
+              <h2 style={{ fontSize: 20, margin: "24px 0 8px" }}>Where &amp; what</h2>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                 {zoneChips.map((z) => (
                   <button
@@ -1485,20 +1408,12 @@ export function ReformaFieldPrototype({
                       }}
                     >
                       <span style={{ textAlign: "center" }}>
-                        <span style={{ ...DAY_CELL, fontSize: 21 }}>
-                          {r.day}
-                        </span>
+                        <span style={{ ...DAY_CELL, fontSize: 21 }}>{r.day}</span>
                         <span style={DOW_CELL}>{r.dow}</span>
                       </span>
                       <span style={{ display: "grid", gap: 1, minWidth: 0 }}>
-                        <span style={{ fontSize: 14, lineHeight: 1.35 }}>
-                          {r.title}
-                        </span>
-                        <span
-                          style={{ fontSize: 11.5, color: mut(55), ...TNUM }}
-                        >
-                          {r.meta}
-                        </span>
+                        <span style={{ fontSize: 14, lineHeight: 1.35 }}>{r.title}</span>
+                        <span style={{ fontSize: 11.5, color: mut(55), ...TNUM }}>{r.meta}</span>
                       </span>
                       <span
                         style={{
@@ -1528,9 +1443,7 @@ export function ReformaFieldPrototype({
           {screen === "attention" && (
             <div>
               <div style={KICKER}>Follow up</div>
-              <h1 style={{ fontSize: 32, margin: "6px 0 2px" }}>
-                Needs attention
-              </h1>
+              <h1 style={{ fontSize: 32, margin: "6px 0 2px" }}>Needs attention</h1>
               <p
                 style={{
                   fontSize: 13,
@@ -1577,9 +1490,7 @@ export function ReformaFieldPrototype({
                       >
                         {it.title}
                       </strong>
-                      <span style={{ fontSize: 12, color: mut(55), ...TNUM }}>
-                        {it.meta}
-                      </span>
+                      <span style={{ fontSize: 12, color: mut(55), ...TNUM }}>{it.meta}</span>
                     </span>
                     <span
                       className={styles.tag}
@@ -1651,9 +1562,7 @@ export function ReformaFieldPrototype({
                   key={tl.name}
                   type="button"
                   onClick={() =>
-                    tl.action.type === "nav"
-                      ? nav(tl.action.screen)
-                      : showToast(tl.action.message)
+                    tl.action.type === "nav" ? nav(tl.action.screen) : showToast(tl.action.message)
                   }
                   className={styles.rowButton}
                   style={{
@@ -1667,12 +1576,7 @@ export function ReformaFieldPrototype({
                     cursor: "pointer",
                   }}
                 >
-                  <PathIcon
-                    size={19}
-                    d={tl.d}
-                    stroke="var(--color-accent)"
-                    strokeWidth={1.5}
-                  />
+                  <PathIcon size={19} d={tl.d} stroke="var(--color-accent)" strokeWidth={1.5} />
                   <span style={{ display: "grid", gap: 1 }}>
                     <span
                       style={{
@@ -1683,9 +1587,7 @@ export function ReformaFieldPrototype({
                     >
                       {tl.name}
                     </span>
-                    <span style={{ fontSize: 11.5, color: mut(55), ...TNUM }}>
-                      {tl.meta}
-                    </span>
+                    <span style={{ fontSize: 11.5, color: mut(55), ...TNUM }}>{tl.meta}</span>
                   </span>
                   <ChevronRightIcon size={16} stroke={mut(40)} />
                 </button>
@@ -1719,9 +1621,7 @@ export function ReformaFieldPrototype({
                 }}
               >
                 <span>12 May</span>
-                <span
-                  style={{ color: "var(--color-accent-700)", fontWeight: 600 }}
-                >
+                <span style={{ color: "var(--color-accent-700)", fontWeight: 600 }}>
                   Today · week 22
                 </span>
                 <span>30 Nov</span>
@@ -1817,11 +1717,7 @@ export function ReformaFieldPrototype({
                     borderRight: "1px solid var(--color-divider)",
                   }}
                 >
-                  <div
-                    style={{ ...STAT_VALUE, color: "var(--color-accent-700)" }}
-                  >
-                    1
-                  </div>
+                  <div style={{ ...STAT_VALUE, color: "var(--color-accent-700)" }}>1</div>
                   <div style={STAT_LABEL}>Open problem</div>
                 </div>
                 <div
@@ -1830,11 +1726,7 @@ export function ReformaFieldPrototype({
                     borderTop: "1px solid var(--color-divider)",
                   }}
                 >
-                  <div
-                    style={{ ...STAT_VALUE, color: "var(--color-accent-700)" }}
-                  >
-                    2
-                  </div>
+                  <div style={{ ...STAT_VALUE, color: "var(--color-accent-700)" }}>2</div>
                   <div style={STAT_LABEL}>Decisions waiting</div>
                 </div>
               </div>
@@ -1846,12 +1738,8 @@ export function ReformaFieldPrototype({
                   justifyContent: "space-between",
                 }}
               >
-                <h2 style={{ fontSize: 20, margin: "0 0 6px" }}>
-                  Week 21 in brief
-                </h2>
-                <span className={`${styles.tag} ${styles.tagAccent}`}>
-                  Approved
-                </span>
+                <h2 style={{ fontSize: 20, margin: "0 0 6px" }}>Week 21 in brief</h2>
+                <span className={`${styles.tag} ${styles.tagAccent}`}>Approved</span>
               </div>
               <p
                 style={{
@@ -1861,15 +1749,13 @@ export function ReformaFieldPrototype({
                   margin: "6px 0 8px",
                 }}
               >
-                Demolition completed in the kitchen and both bathrooms; the skip
-                was collected Friday. One problem was raised — a damp patch in
-                the bathroom ceiling, plumber inspecting Monday. Two decisions
-                wait on the owner: the kitchen worktop material and an extra
-                socket in the hallway.
+                Demolition completed in the kitchen and both bathrooms; the skip was collected
+                Friday. One problem was raised — a damp patch in the bathroom ceiling, plumber
+                inspecting Monday. Two decisions wait on the owner: the kitchen worktop material and
+                an extra socket in the hallway.
               </p>
               <p style={{ fontSize: 11, color: mut(45), margin: 0 }}>
-                Drafted by AI from the week’s entries · reviewed &amp; approved
-                by Maite
+                Drafted by AI from the week’s entries · reviewed &amp; approved by Maite
               </p>
             </div>
           )}
@@ -1965,11 +1851,7 @@ export function ReformaFieldPrototype({
                     borderBottom: "1px solid var(--color-divider)",
                   }}
                 >
-                  <FileIcon
-                    size={18}
-                    strokeWidth={1.5}
-                    stroke="var(--color-accent)"
-                  />
+                  <FileIcon size={18} strokeWidth={1.5} stroke="var(--color-accent)" />
                   <span style={{ display: "grid", gap: 1, minWidth: 0 }}>
                     <span
                       style={{
@@ -1981,13 +1863,9 @@ export function ReformaFieldPrototype({
                     >
                       {d.name}
                     </span>
-                    <span style={{ fontSize: 11.5, color: mut(55), ...TNUM }}>
-                      {d.meta}
-                    </span>
+                    <span style={{ fontSize: 11.5, color: mut(55), ...TNUM }}>{d.meta}</span>
                   </span>
-                  <span className={`${styles.tag} ${styles.tagNeutral}`}>
-                    {d.kind}
-                  </span>
+                  <span className={`${styles.tag} ${styles.tagNeutral}`}>{d.kind}</span>
                 </div>
               ))}
               <button
@@ -2051,9 +1929,7 @@ export function ReformaFieldPrototype({
                 <PathIcon size={20} d={n.d} strokeWidth={1.6} />
                 <span>
                   {n.label}
-                  <span style={{ color: "var(--color-accent)", ...TNUM }}>
-                    {badge}
-                  </span>
+                  <span style={{ color: "var(--color-accent)", ...TNUM }}>{badge}</span>
                 </span>
               </button>
             );
@@ -2104,8 +1980,7 @@ export function ReformaFieldPrototype({
               style={{
                 position: "absolute",
                 inset: 0,
-                background:
-                  "color-mix(in srgb,var(--color-neutral-900) 45%, transparent)",
+                background: "color-mix(in srgb,var(--color-neutral-900) 45%, transparent)",
                 border: 0,
                 padding: 0,
                 cursor: "pointer",
@@ -2143,12 +2018,8 @@ export function ReformaFieldPrototype({
 
               {sheet === "problem" && (
                 <>
-                  <div style={{ ...KICKER, fontSize: 10 }}>
-                    Goes to the owner &amp; team
-                  </div>
-                  <h2 style={{ fontSize: 24, margin: "4px 0 12px" }}>
-                    Report a problem
-                  </h2>
+                  <div style={{ ...KICKER, fontSize: 10 }}>Goes to the owner &amp; team</div>
+                  <h2 style={{ fontSize: 24, margin: "4px 0 12px" }}>Report a problem</h2>
                   <input
                     value={pTitle}
                     onChange={(e) => setPTitle(e.target.value)}
@@ -2203,11 +2074,7 @@ export function ReformaFieldPrototype({
                           "linear-gradient(160deg,var(--color-neutral-300),var(--color-neutral-400))",
                       }}
                     >
-                      <ImageIcon
-                        size={16}
-                        strokeWidth={1.5}
-                        stroke="var(--color-neutral-600)"
-                      />
+                      <ImageIcon size={16} strokeWidth={1.5} stroke="var(--color-neutral-600)" />
                     </div>
                     <span style={{ display: "grid", gap: 1, minWidth: 0 }}>
                       <span
@@ -2220,9 +2087,7 @@ export function ReformaFieldPrototype({
                       >
                         {lastPhotoLabel}
                       </span>
-                      <span style={{ fontSize: 11, color: mut(55) }}>
-                        Attached as evidence
-                      </span>
+                      <span style={{ fontSize: 11, color: mut(55) }}>Attached as evidence</span>
                     </span>
                     <button
                       type="button"
@@ -2250,9 +2115,7 @@ export function ReformaFieldPrototype({
                     />
                     <span style={{ display: "grid", gap: 1 }}>
                       <span style={{ fontSize: 13 }}>Zone: {zone}</span>
-                      <span style={{ fontSize: 11, color: mut(55) }}>
-                        From today’s entry
-                      </span>
+                      <span style={{ fontSize: 11, color: mut(55) }}>From today’s entry</span>
                     </span>
                     <button
                       type="button"
@@ -2280,12 +2143,8 @@ export function ReformaFieldPrototype({
 
               {sheet === "decision" && (
                 <>
-                  <div style={{ ...KICKER, fontSize: 10 }}>
-                    The owner gets a notification
-                  </div>
-                  <h2 style={{ fontSize: 24, margin: "4px 0 12px" }}>
-                    Ask the owner to decide
-                  </h2>
+                  <div style={{ ...KICKER, fontSize: 10 }}>The owner gets a notification</div>
+                  <h2 style={{ fontSize: 24, margin: "4px 0 12px" }}>Ask the owner to decide</h2>
                   <input
                     value={dTitle}
                     onChange={(e) => setDTitle(e.target.value)}
@@ -2336,12 +2195,8 @@ export function ReformaFieldPrototype({
 
               {sheet === "finish" && (
                 <>
-                  <div style={{ ...KICKER, fontSize: 10, ...TNUM }}>
-                    Entry № 14 · 25 August
-                  </div>
-                  <h2 style={{ fontSize: 24, margin: "4px 0 10px" }}>
-                    Finish the day?
-                  </h2>
+                  <div style={{ ...KICKER, fontSize: 10, ...TNUM }}>Entry № 14 · 25 August</div>
+                  <h2 style={{ fontSize: 24, margin: "4px 0 10px" }}>Finish the day?</h2>
                   <div
                     style={{
                       display: "grid",

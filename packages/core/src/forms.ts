@@ -74,7 +74,9 @@ export const projectSettingsSchema = projectFormSchema
   })
   .refine(
     (value) =>
-      value.startDate === null || value.deadlineDate === null || value.startDate <= value.deadlineDate,
+      value.startDate === null ||
+      value.deadlineDate === null ||
+      value.startDate <= value.deadlineDate,
     {
       message: "Project deadline must be on or after the project start date.",
       path: ["deadlineDate"],
