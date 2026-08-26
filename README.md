@@ -63,7 +63,9 @@ gateway is documented in [docs/en/08-telegram-gateway.md](docs/en/08-telegram-ga
 the optional NanoClaw gateway is documented in
 [docs/en/09-nanoclaw-gateway.md](docs/en/09-nanoclaw-gateway.md). Optional document
 intelligence is documented in
-[docs/en/10-document-intelligence.md](docs/en/10-document-intelligence.md).
+[docs/en/10-document-intelligence.md](docs/en/10-document-intelligence.md). The plan for
+absorbing the field design prototype into the product lives in
+[docs/en/11-field-redesign-integration.md](docs/en/11-field-redesign-integration.md).
 
 ## Project status
 

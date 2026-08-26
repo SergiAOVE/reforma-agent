@@ -22,12 +22,7 @@ import { useState } from "react";
 
 import styles from "./classical.module.css";
 import { ReformaFieldPrototype } from "./prototype";
-import {
-  chip,
-  type DayState,
-  type ScheduleHealth,
-  type Screen,
-} from "./prototype-data";
+import { chip, type DayState, type ScheduleHealth, type Screen } from "./prototype-data";
 
 const DAY_STATES: { value: DayState; label: string }[] = [
   { value: "fresh", label: "Fresh" },
@@ -136,16 +131,12 @@ function ChipGroup<T extends string>({
 export function ReformaFieldCaseStudy() {
   const [dayState, setDayState] = useState<DayState>("in_progress");
   const [startScreen, setStartScreen] = useState<Screen>("today");
-  const [scheduleHealth, setScheduleHealth] =
-    useState<ScheduleHealth>("at_risk");
+  const [scheduleHealth, setScheduleHealth] = useState<ScheduleHealth>("at_risk");
   const [landscape, setLandscape] = useState(false);
   const [fieldMode, setFieldMode] = useState(false);
 
   return (
-    <div
-      className={styles.classical}
-      style={{ minHeight: "100vh", padding: "52px 24px 80px" }}
-    >
+    <div className={styles.classical} style={{ minHeight: "100vh", padding: "52px 24px 80px" }}>
       <div style={{ maxWidth: 1180, margin: "0 auto" }}>
         <div
           style={{
@@ -169,11 +160,10 @@ export function ReformaFieldCaseStudy() {
                 margin: "0 0 12px",
               }}
             >
-              The daily update is reframed as a <em>diary entry</em>: one page a
-              day, always open, never “started”. Notes, photographs and voice
-              notes fall into it with one tap; problems and owner decisions are
-              two-field sheets, not forms. Everything autosaves — the only
-              ceremony left is <em>Finish the day</em>.
+              The daily update is reframed as a <em>diary entry</em>: one page a day, always open,
+              never “started”. Notes, photographs and voice notes fall into it with one tap;
+              problems and owner decisions are two-field sheets, not forms. Everything autosaves —
+              the only ceremony left is <em>Finish the day</em>.
             </p>
 
             <hr className={styles.hr} style={{ margin: "14px 0" }} />
@@ -187,12 +177,11 @@ export function ReformaFieldCaseStudy() {
                 color: "color-mix(in srgb,var(--color-text) 75%, transparent)",
               }}
             >
-              <strong>What changed from the current UI</strong> (see the
-              recreation): capture actions moved onto the home screen; voice
-              notes are first-class and transcribe into the entry; photos land
-              in a strip, not a file picker; attention is sorted by deadline
-              with one-tap resolve; the owner overview, budget and documents
-              live under <em>More</em>.
+              <strong>What changed from the current UI</strong> (see the recreation): capture
+              actions moved onto the home screen; voice notes are first-class and transcribe into
+              the entry; photos land in a strip, not a file picker; attention is sorted by deadline
+              with one-tap resolve; the owner overview, budget and documents live under{" "}
+              <em>More</em>.
             </p>
             <p
               style={{
@@ -202,9 +191,9 @@ export function ReformaFieldCaseStudy() {
                 color: "color-mix(in srgb,var(--color-text) 65%, transparent)",
               }}
             >
-              <strong>Try it:</strong> tap the mic and stop it · add photos ·
-              report a problem · finish the day · browse Diary, Attention and
-              More. Tweaks: day state, start screen, site mode (bigger UI).
+              <strong>Try it:</strong> tap the mic and stop it · add photos · report a problem ·
+              finish the day · browse Diary, Attention and More. Tweaks: day state, start screen,
+              site mode (bigger UI).
             </p>
 
             <hr className={styles.hr} style={{ margin: "20px 0 14px" }} />
