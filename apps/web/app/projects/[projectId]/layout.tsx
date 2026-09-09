@@ -34,7 +34,11 @@ export default async function ProjectLayout({ children, params }: ProjectLayoutP
       .limit(12),
   ]);
   const milestones = [
-    ...(visits ?? []).map((visit) => ({ date: visit.visit_date, label: visit.title, kind: "visit" as const })),
+    ...(visits ?? []).map((visit) => ({
+      date: visit.visit_date,
+      label: visit.title,
+      kind: "visit" as const,
+    })),
     ...(decisions ?? [])
       .filter((decision) => Boolean(decision.deadline))
       .map((decision) => ({

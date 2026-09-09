@@ -21,7 +21,10 @@ function addDays(value: string, days: number): string {
 }
 
 function latestDate(values: Array<string | null | undefined>): string | undefined {
-  return values.filter((value): value is string => Boolean(value)).sort().at(-1);
+  return values
+    .filter((value): value is string => Boolean(value))
+    .sort()
+    .at(-1);
 }
 
 export function todayIsoDate(now = new Date()): string {
@@ -75,7 +78,11 @@ export function buildProjectTimelineRange({
   milestones: ProjectTimelineMilestone[];
 }): { start: string; end: string } {
   const start = startDate ?? projectCreatedAt?.slice(0, 10) ?? today;
-  const latest = latestDate([today, deadlineDate, ...milestones.map((milestone) => milestone.date)]);
+  const latest = latestDate([
+    today,
+    deadlineDate,
+    ...milestones.map((milestone) => milestone.date),
+  ]);
   const end = latest && latest > start ? latest : addDays(start, 30);
 
   return { start, end };
