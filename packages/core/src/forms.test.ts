@@ -21,6 +21,8 @@ import {
   siteUpdateStartSchema,
   summaryReviewFormSchema,
   updateMemberStakeholderSchema,
+  visitAutosaveFieldsSchema,
+  visitAutosaveTokenSchema,
   visitFormSchema,
   visitStatusTransitionSchema,
   weeklySummaryRequestSchema,
@@ -301,6 +303,74 @@ describe("visitFormSchema", () => {
     expect(visitFormSchema.safeParse({ title: "Visit", visitDate: "03/07/2026" }).success).toBe(
       false,
     );
+  });
+});
+
+describe("visitAutosaveFieldsSchema", () => {
+  it("accepts autosave fields and never produces a summary", () => {
+    const parsed = visitAutosaveFieldsSchema.parse({
+      title: "Site update - 26 Aug 2026",
+      visitDate: "2026-08-26",
+      generalStatus: "plumbing first fix underway",
+      humanNotes: "Old pipework worse than expected.",
+      primaryZoneId: "",
+      primaryTradeId: "",
+    });
+
+    expect(parsed).toEqual({
+      title: "Site update - 26 Aug 2026",
+      visitDate: "2026-08-26",
+      generalStatus: "plumbing first fix underway",
+      humanNotes: "Old pipework worse than expected.",
+      primaryZoneId: null,
+      primaryTradeId: null,
+    });
+  });
+
+  it("strips a summary posted by a stale client", () => {
+    // Regression for the stale-tab save: a tab opened before an AI summary
+    // existed keeps posting the summary it froze at load. The autosave
+    // boundary must drop the field, so a note save can never rewrite the
+    // summary or flip its review state. Explicit review stays in
+    // reviewSummary().
+    const parsed = visitAutosaveFieldsSchema.parse({
+      title: "Site update - 26 Aug 2026",
+      visitDate: "2026-08-26",
+      generalStatus: "",
+      humanNotes: "Electrician confirmed for Thursday.",
+      primaryZoneId: "",
+      primaryTradeId: "",
+      summary: "",
+    });
+
+    expect(parsed).not.toHaveProperty("summary");
+  });
+
+  it("also strips a stale non-empty summary", () => {
+    const parsed = visitAutosaveFieldsSchema.parse({
+      title: "Site update - 26 Aug 2026",
+      visitDate: "2026-08-26",
+      generalStatus: "",
+      humanNotes: "",
+      primaryZoneId: "",
+      primaryTradeId: "",
+      summary: "An old draft the tab loaded an hour ago.",
+    });
+
+    expect(parsed).not.toHaveProperty("summary");
+  });
+});
+
+describe("visitAutosaveTokenSchema", () => {
+  it("accepts a server-issued timestamp and trims surrounding whitespace", () => {
+    expect(visitAutosaveTokenSchema.parse(" 2026-08-26T09:00:00.123456+00:00 ")).toBe(
+      "2026-08-26T09:00:00.123456+00:00",
+    );
+  });
+
+  it("rejects an empty token", () => {
+    expect(visitAutosaveTokenSchema.safeParse("").success).toBe(false);
+    expect(visitAutosaveTokenSchema.safeParse("   ").success).toBe(false);
   });
 });
 

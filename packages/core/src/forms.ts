@@ -139,6 +139,24 @@ export const visitFormSchema = z.object({
 });
 export type VisitFormInput = z.infer<typeof visitFormSchema>;
 
+/**
+ * The visit autosave boundary: the visit form minus `summary`. A visit summary
+ * is review-managed content — the worker writes AI drafts and the explicit
+ * summary review action approves, edits or rejects them — so autosave must not
+ * carry it. Zod strips unknown keys, which also covers stale clients that
+ * still post `summary`: the field is dropped here instead of turning a note
+ * save into a review (see docs/en/11-field-redesign-integration.md).
+ */
+export const visitAutosaveFieldsSchema = visitFormSchema.omit({ summary: true });
+export type VisitAutosaveFieldsInput = z.infer<typeof visitAutosaveFieldsSchema>;
+
+/**
+ * The autosave concurrency token: `visits.updated_at` exactly as the server
+ * last returned it. Opaque to clients — the database compares it against the
+ * current row, so it must be echoed verbatim, never reformatted.
+ */
+export const visitAutosaveTokenSchema = nonEmptyStringSchema.max(64);
+
 export const SITE_UPDATE_DESTINATIONS = ["update", "files", "issue", "decision"] as const;
 export const siteUpdateStartSchema = z.object({
   projectId: uuidSchema,
